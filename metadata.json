@@ -1,0 +1,6 @@
+{
+  "name": "Jemah's TaskPulse",
+  "description": "Mobile-first job reminder and worklist deadline tracker with daily progress digest, customizable alerts, and rapid task capture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
