@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Plus, Settings, CheckSquare } from 'lucide-react';
+import { Calendar, Plus, Settings, CheckSquare, Sun, Moon } from 'lucide-react';
 
 interface HeaderProps {
   appTitle: string;
@@ -7,6 +7,8 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenHolidays: () => void;
   notificationPermission?: NotificationPermission | 'default';
+  isDark: boolean;
+  onToggleTheme: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,6 +17,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenHolidays,
   notificationPermission = 'default',
+  isDark,
+  onToggleTheme,
 }) => {
   return (
     <header className="w-full backdrop-blur-xl bg-white/95 dark:bg-slate-950/95 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-150">
@@ -22,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between gap-2">
           {/* Brand Title */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white shrink-0">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-indigo-600 text-white shrink-0 shadow-xs">
               <CheckSquare className="w-4 h-4 stroke-[2.5]" />
             </div>
             <h1 className="text-[15px] sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white truncate">
@@ -32,6 +36,21 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Single-Row Action Bar (44px mobile touch targets) */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Quick Theme Toggle (Sun / Moon) */}
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className="inline-flex items-center justify-center min-h-[42px] min-w-[42px] p-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200/70 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 transition active:scale-95"
+              title={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+              aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {isDark ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-600" />
+              )}
+            </button>
+
             <button
               type="button"
               onClick={onOpenHolidays}

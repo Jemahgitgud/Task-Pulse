@@ -16,6 +16,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { P2PSyncModal } from './components/P2PSyncModal';
 import { MalaysianHolidaysModal } from './components/MalaysianHolidaysModal';
 import { MalaysiaCelebrationModal } from './components/MalaysiaCelebrationModal';
+import { AIBriefingModal } from './components/AIBriefingModal';
 import { CheckCircle2, X } from 'lucide-react';
 import { formatDateKey, calculatePrepDeadline } from './utils/date';
 import { MalaysiaHoliday, getMalaysianHolidays } from './utils/malaysiaHolidays';
@@ -72,6 +73,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isP2PModalOpen, setIsP2PModalOpen] = useState(false);
   const [isHolidaysOpen, setIsHolidaysOpen] = useState(false);
+  const [isAIBriefingOpen, setIsAIBriefingOpen] = useState(false);
   const [selectedHoliday, setSelectedHoliday] = useState<MalaysiaHoliday | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [prefilledDate, setPrefilledDate] = useState<string | undefined>(undefined);
@@ -103,12 +105,18 @@ export default function App() {
     });
   }, []);
 
-  // Sync dark class to html
+  // Sync dark class to html and meta theme-color
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
+    const metaTheme = document.getElementById('meta-theme-color');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', isDark ? '#090d16' : '#f8fafc');
     }
     localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
   }, [isDark]);
@@ -292,6 +300,8 @@ export default function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenHolidays={() => setIsHolidaysOpen(true)}
           notificationPermission={settings.permission}
+          isDark={isDark}
+          onToggleTheme={() => setIsDark((prev) => !prev)}
         />
 
         <ActiveAlertBanner
@@ -319,6 +329,7 @@ export default function App() {
             }}
             onQuickAdd={handleQuickAdd}
             onClearCompleted={clearCompleted}
+            onOpenAIBriefing={() => setIsAIBriefingOpen(true)}
           />
         </div>
       </main>
@@ -400,6 +411,12 @@ export default function App() {
         holiday={selectedHoliday}
         onClose={() => setSelectedHoliday(null)}
         onScheduleTask={handleAutoLogHolidayTask}
+      />
+
+      <AIBriefingModal
+        isOpen={isAIBriefingOpen}
+        onClose={() => setIsAIBriefingOpen(false)}
+        tasks={tasks}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import {
   isPastCelebrationTask,
 } from '../utils/date';
 import { TaskCard } from './TaskCard';
+import { DailyProgressDigestCard } from './DailyProgressDigestCard';
 
 export type TaskFilter = 'upcoming' | 'close' | 'overdue' | 'today' | 'completed' | 'all';
 
@@ -26,6 +27,7 @@ interface DeadlineTaskListViewProps {
     dueTime?: string;
   }) => void;
   onClearCompleted: () => void;
+  onOpenAIBriefing?: () => void;
 }
 
 const PRIORITY_WEIGHT: Record<TaskPriority, number> = {
@@ -52,6 +54,7 @@ export const DeadlineTaskListView: React.FC<DeadlineTaskListViewProps> = ({
   onEdit,
   onQuickAdd,
   onClearCompleted,
+  onOpenAIBriefing,
 }) => {
   const today = formatDateKey();
   const [filter, setFilter] = useState<TaskFilter>('upcoming');
@@ -241,6 +244,14 @@ export const DeadlineTaskListView: React.FC<DeadlineTaskListViewProps> = ({
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      {/* Daily Progress Digest Hero Card (matching user screenshot with dynamic circle, done/due metrics, and AI Briefing) */}
+      <DailyProgressDigestCard
+        tasks={tasks}
+        onOpenAIBriefing={() => onOpenAIBriefing?.()}
+        onFilterToday={() => setFilter(filter === 'today' ? 'upcoming' : 'today')}
+        onFilterCompleted={() => setFilter(filter === 'completed' ? 'upcoming' : 'completed')}
+      />
+
       {/* Close-Deadline Summary Strip (Tap any card to filter) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <button
