@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle, X, CalendarPlus, Clock } from 'lucide-react';
+import { AlertTriangle, BellRing, CheckCircle, X, CalendarPlus, Clock } from 'lucide-react';
 import { TaskAlert } from '../types';
 
 interface ActiveAlertBannerProps {
@@ -22,6 +22,8 @@ export const ActiveAlertBanner: React.FC<ActiveAlertBannerProps> = ({
   if (!alert) return null;
 
   const isCritical = alert.urgency === 'critical';
+  const isInfo = alert.urgency === 'info';
+  const isSyntheticAlert = alert.taskId === 'test-alert' || alert.taskId === 'digest-alert';
 
   return (
     <div className="mb-4">
@@ -29,6 +31,8 @@ export const ActiveAlertBanner: React.FC<ActiveAlertBannerProps> = ({
         className={`relative overflow-hidden rounded-2xl border p-4 shadow-lg transition-all animate-slide-up ${
           isCritical
             ? 'bg-rose-500/10 border-rose-300 dark:border-rose-900/80 text-rose-950 dark:text-rose-100'
+            : isInfo
+            ? 'bg-indigo-500/10 border-indigo-300 dark:border-indigo-800/80 text-indigo-950 dark:text-indigo-100'
             : 'bg-amber-500/10 border-amber-300 dark:border-amber-900/80 text-amber-950 dark:text-amber-100'
         }`}
       >
@@ -38,10 +42,16 @@ export const ActiveAlertBanner: React.FC<ActiveAlertBannerProps> = ({
               className={`p-2 rounded-xl shrink-0 mt-0.5 ${
                 isCritical
                   ? 'bg-rose-600 text-white'
+                  : isInfo
+                  ? 'bg-indigo-600 text-white'
                   : 'bg-amber-600 text-white'
               }`}
             >
-              <AlertTriangle className="w-4 h-4 animate-bounce" />
+              {isInfo ? (
+                <BellRing className="w-4 h-4 animate-bounce" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 animate-bounce" />
+              )}
             </div>
 
             <div className="min-w-0">
@@ -55,29 +65,42 @@ export const ActiveAlertBanner: React.FC<ActiveAlertBannerProps> = ({
 
               {/* Quick Actions */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCompleteTask(alert.taskId);
-                    onDismiss();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition active:scale-95"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Mark Completed</span>
-                </button>
+                {!isSyntheticAlert ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onCompleteTask(alert.taskId);
+                        onDismiss();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition active:scale-95"
+                    >
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Mark Completed</span>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    onRescheduleTask(alert.taskId, 1);
-                    onDismiss();
-                  }}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-                >
-                  <CalendarPlus className="w-3.5 h-3.5" />
-                  <span>Reschedule +1d</span>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRescheduleTask(alert.taskId, 1);
+                        onDismiss();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                    >
+                      <CalendarPlus className="w-3.5 h-3.5" />
+                      <span>Reschedule +1d</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onDismiss}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition active:scale-95"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Got It</span>
+                  </button>
+                )}
 
                 {notificationPermission !== 'granted' && (
                   <button
@@ -86,7 +109,7 @@ export const ActiveAlertBanner: React.FC<ActiveAlertBannerProps> = ({
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition"
                   >
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Enable System Alerts</span>
+                    <span>Enable Browser Push</span>
                   </button>
                 )}
               </div>

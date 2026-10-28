@@ -1,10 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { Task, TaskPriority, TaskCategory, TaskStatus, P2PSyncStats } from '../types';
-import { formatDateKey } from '../utils/date';
+import { formatDateKey, isCelebrationTask } from '../utils/date';
 import { playCompletionChime, playClickTone, triggerHaptic, fireConfetti } from '../utils/audio';
 import { p2pService } from '../services/webrtcService';
 
 const STORAGE_KEY = 'taskpulse_tasks_v2';
+const PROJECT_START_DATE = '2026-10-01';
+
+/**
+ * Removes Persediaan Sambutan / holiday tasks from before October 2026 (project creation month),
+ * while leaving all October 2026+ celebration tasks intact even after their date passes.
+ */
+function cleanPreOctoberCelebrations(list: Task[]): Task[] {
+  return list.filter((t) => {
+    if (!isCelebrationTask(t)) return true;
+    const targetDate = t.eventDate || t.dueDate;
+    return !targetDate || targetDate >= PROJECT_START_DATE;
+  });
+}
 
 export function getSampleTasks(): Task[] {
   const today = formatDateKey();
@@ -137,7 +150,10 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = cleanPreOctoberCelebrations(parsed);
+          if (cleaned.length > 0) return cleaned;
+        }
       }
     } catch {}
     return getSampleTasks();
@@ -170,9 +186,10 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
     p2pService.registerCallbacks(
       (incomingTasks, action) => {
         if (!active) return;
-        setTasks(incomingTasks);
+        const cleaned = cleanPreOctoberCelebrations(incomingTasks);
+        setTasks(cleaned);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(incomingTasks));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
         } catch {}
         setSyncStatus('synced');
       },
@@ -199,13 +216,14 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
         if (!active) return;
 
         if (Array.isArray(data.tasks) && data.tasks.length > 0) {
-          setTasks(data.tasks);
+          const cleaned = cleanPreOctoberCelebrations(data.tasks);
+          setTasks(cleaned);
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data.tasks));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
           } catch {}
         } else {
           // If server database is empty, seed it with initial tasks
-          const initial = tasks.length > 0 ? tasks : getSampleTasks();
+          const initial = tasks.length > 0 ? cleanPreOctoberCelebrations(tasks) : getSampleTasks();
           await fetch('/api/tasks/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -233,9 +251,10 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
         try {
           const payload = JSON.parse(e.data);
           if (Array.isArray(payload.tasks)) {
-            setTasks(payload.tasks);
+            const cleaned = cleanPreOctoberCelebrations(payload.tasks);
+            setTasks(cleaned);
             try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.tasks));
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
             } catch {}
             setSyncStatus('synced');
           }

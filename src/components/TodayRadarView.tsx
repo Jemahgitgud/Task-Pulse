@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskCategory } from '../types';
-import { formatDateKey, formatDisplayDate } from '../utils/date';
+import { formatDateKey, formatDisplayDate, isPastCelebrationTask } from '../utils/date';
 import { TaskCard } from './TaskCard';
 import { getMalaysianHolidays, MalaysiaHoliday } from '../utils/malaysiaHolidays';
 
@@ -64,8 +64,10 @@ export const TodayRadarView: React.FC<TodayRadarViewProps> = ({
   const [quickDueTime, setQuickDueTime] = useState('');
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // Compute stats for today
-  const activeTasks = tasks.filter((t) => t.status !== 'completed');
+  // Compute stats for today (leave passed Persediaan Sambutan tasks untouched & out of overdue)
+  const activeTasks = tasks.filter(
+    (t) => t.status !== 'completed' && !isPastCelebrationTask(t, today)
+  );
   const overdueTasks = activeTasks.filter((t) => t.dueDate < today);
   const dueTodayTasks = activeTasks.filter((t) => t.dueDate === today);
   const completedTodayTasks = tasks.filter(
@@ -80,8 +82,12 @@ export const TodayRadarView: React.FC<TodayRadarViewProps> = ({
 
   // Selected date tasks
   const selectedDateTasks = tasks.filter((t) => t.dueDate === selectedDate);
-  const selectedActive = selectedDateTasks.filter((t) => t.status !== 'completed');
-  const selectedCompleted = selectedDateTasks.filter((t) => t.status === 'completed');
+  const selectedActive = selectedDateTasks.filter(
+    (t) => t.status !== 'completed' && !isPastCelebrationTask(t, today)
+  );
+  const selectedCompleted = selectedDateTasks.filter(
+    (t) => t.status === 'completed' || isPastCelebrationTask(t, today)
+  );
 
   // Pinned / Urgent tasks for today
   const pinnedOrUrgentToday = dueTodayTasks.filter(

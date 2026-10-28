@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Task, UserSettings, TaskPriority, TaskCategory } from './types';
 import { useTasks } from './hooks/useTasks';
-import { useAlerts, requestNotificationPermission } from './hooks/useAlerts';
+import { useAlerts, triggerNotification } from './hooks/useAlerts';
+import {
+  registerServiceWorkerAndPush,
+  syncPushSubscriptionIfGranted,
+  triggerServerPushTest,
+} from './utils/pushNotifications';
+import { playAlertPing, triggerHaptic } from './utils/audio';
 import { Header } from './components/Header';
 import { NavigationTabs, TabKey } from './components/NavigationTabs';
 import { ActiveAlertBanner } from './components/ActiveAlertBanner';
@@ -14,7 +20,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { AIBriefingModal } from './components/AIBriefingModal';
 import { P2PSyncModal } from './components/P2PSyncModal';
 import { CheckCircle2, X } from 'lucide-react';
-import { formatDateKey, calculatePrepDeadline } from './utils/date';
+import { formatDateKey, calculatePrepDeadline, isPastCelebrationTask } from './utils/date';
 import { MalaysiaHoliday, getMalaysianHolidays } from './utils/malaysiaHolidays';
 
 const SETTINGS_KEY = 'taskpulse_settings_v2';
@@ -51,7 +57,12 @@ export default function App() {
     if (typeof window === 'undefined') return defaultSettings;
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
-      if (stored) return { ...defaultSettings, ...JSON.parse(stored) };
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const livePerm =
+          typeof Notification !== 'undefined' ? Notification.permission : parsed.permission || 'default';
+        return { ...defaultSettings, ...parsed, permission: livePerm, enabled: parsed.enabled ?? true };
+      }
     } catch {}
     return defaultSettings;
   });
@@ -87,7 +98,14 @@ export default function App() {
   } = useTasks(settings.soundEnabled, settings.vibrationEnabled);
 
   // Alerts monitor
-  const { activeAlert, dismissAlert } = useAlerts(tasks, settings);
+  const { activeAlert, dismissAlert, showTestAlert } = useAlerts(tasks, settings);
+
+  // Register Service Worker & refresh Web Push subscription on boot
+  useEffect(() => {
+    syncPushSubscriptionIfGranted().then(({ permission }) => {
+      setSettings((prev) => (prev.permission !== permission ? { ...prev, permission } : prev));
+    });
+  }, []);
 
   // Sync dark class to html
   useEffect(() => {
@@ -192,8 +210,10 @@ export default function App() {
   };
 
   const handleAutoLogAllMajorHolidays = (year: number) => {
+    const todayKey = formatDateKey();
     const holidays = getMalaysianHolidays(year);
-    const majorHolidays = holidays.filter((h) => h.isPublicHoliday);
+    // Only auto-log upcoming public holidays that have not already passed
+    const majorHolidays = holidays.filter((h) => h.isPublicHoliday && h.date >= todayKey);
     let count = 0;
     for (const h of majorHolidays) {
       const prepDueDate = calculatePrepDeadline(h.date, 7);
@@ -222,11 +242,17 @@ export default function App() {
         count++;
       }
     }
-    showToast(`Berjaya menambah ${count} perayaan utama (${year}) dengan dateline 7 hari sebelum!`);
+    showToast(
+      count > 0
+        ? `Berjaya menambah ${count} perayaan akan datang (${year}) dengan dateline 7 hari sebelum!`
+        : `Semua perayaan akan datang bagi ${year} telah pun dilog!`
+    );
   };
 
   const today = formatDateKey();
-  const activeTasks = tasks.filter((t) => t.status !== 'completed');
+  const activeTasks = tasks.filter(
+    (t) => t.status !== 'completed' && !isPastCelebrationTask(t, today)
+  );
   const urgentCount = activeTasks.filter(
     (t) => t.priority === 'urgent' || t.dueDate <= today
   ).length;
@@ -253,6 +279,29 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAIBriefing={() => setIsAIBriefingOpen(true)}
         onOpenP2PSync={() => setIsP2PModalOpen(true)}
+        notificationPermission={settings.permission}
+        onEnableNotifications={async () => {
+          const res = await registerServiceWorkerAndPush();
+          handleUpdateSettings({ permission: res.permission, enabled: true });
+          playAlertPing(settings.soundEnabled);
+          triggerHaptic(40, settings.vibrationEnabled);
+          if (res.permission === 'granted') {
+            await triggerNotification("Jemah's TaskPulse: Alerts Active! 🔔", {
+              body: 'System notifications and deadline reminders are enabled.',
+            });
+            await triggerServerPushTest();
+            showTestAlert('System push notifications & in-app deadline alerts are enabled and active!');
+            showToast('Notifications enabled & test alert sent!');
+          } else if (res.blockedByIframe) {
+            showTestAlert(
+              'In-app banners & sound chimes are active! To also receive OS system popups, open the Shared/Direct App URL in a full browser tab.'
+            );
+            setActiveTab('digest');
+          } else {
+            showTestAlert('In-app visual banners & audio chimes are active!');
+            setActiveTab('digest');
+          }
+        }}
       />
 
       {/* Main Container */}
@@ -272,8 +321,21 @@ export default function App() {
             onRescheduleTask={(taskId, days) => rescheduleTask(taskId, days)}
             notificationPermission={settings.permission}
             onRequestPermission={async () => {
-              const perm = await requestNotificationPermission();
-              handleUpdateSettings({ permission: perm, enabled: perm === 'granted' });
+              const res = await registerServiceWorkerAndPush();
+              handleUpdateSettings({ permission: res.permission, enabled: true });
+              if (res.permission === 'granted') {
+                await triggerNotification("Jemah's TaskPulse: Alerts Active! 🔔", {
+                  body: 'Background push and deadline alerts are now enabled.',
+                });
+                showToast('Browser & background push notifications enabled!');
+              } else {
+                setActiveTab('digest');
+                showToast(
+                  res.blockedByIframe
+                    ? 'Open the direct app URL in a browser tab to allow OS popups (in-app alerts active!)'
+                    : 'Check browser site permissions to allow OS popups'
+                );
+              }
             }}
           />
 
@@ -359,6 +421,7 @@ export default function App() {
               onUpdateSettings={handleUpdateSettings}
               onResetSampleTasks={resetSampleTasks}
               onImportTasks={importTasks}
+              onTriggerTestBanner={showTestAlert}
               onOpenQuickAdd={() => {
                 setEditingTask(null);
                 setPrefilledDate(undefined);

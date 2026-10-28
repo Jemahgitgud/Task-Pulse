@@ -20,7 +20,7 @@ import {
   getMalaysianHolidays,
   getDefaultExamMilestones,
 } from '../utils/malaysiaHolidays';
-import { calculatePrepDeadline, formatDisplayDate } from '../utils/date';
+import { calculatePrepDeadline, formatDateKey } from '../utils/date';
 
 interface MalaysianHolidaysModalProps {
   isOpen: boolean;
@@ -39,8 +39,9 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
   onSelectHolidayForDetails,
   existingTaskEventDates = new Set(),
 }) => {
+  const today = formatDateKey();
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [loggedNotification, setLoggedNotification] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
 
   const handleLogAll = () => {
     onAutoLogAllMajor(selectedYear);
-    setLoggedNotification(`Semua cuti umum utama ${selectedYear} telah diautolog ke senarai tugasan!`);
+    setLoggedNotification(`Semua cuti umum utama akan datang (${selectedYear}) telah diautolog ke senarai tugasan!`);
     setTimeout(() => setLoggedNotification(null), 3500);
   };
 
@@ -226,11 +227,16 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
           {filteredHolidays.map((holiday) => {
             const prepDeadline = calculatePrepDeadline(holiday.date, 7);
             const isAlreadyTracked = existingTaskEventDates.has(holiday.date);
+            const isPastHoliday = holiday.date < today;
 
             return (
               <div
                 key={holiday.id}
-                className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 hover:border-indigo-300 dark:hover:border-indigo-700/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+                className={`p-3 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs ${
+                  isPastHoliday
+                    ? 'border-slate-200/70 dark:border-slate-800/60 bg-slate-50/60 dark:bg-slate-900/40 opacity-75'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/90 hover:border-indigo-300 dark:hover:border-indigo-700/60'
+                }`}
               >
                 {/* Left: Date & Name */}
                 <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
@@ -252,6 +258,11 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
                       {holiday.isPublicHoliday && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60">
                           Cuti Umum
+                        </span>
+                      )}
+                      {isPastHoliday && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                          Telah Berlalu
                         </span>
                       )}
                     </div>
@@ -280,18 +291,20 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
                     Butiran
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleLogHoliday(holiday)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-[11px] transition active:scale-95 shadow-xs ${
-                      isAlreadyTracked
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                    }`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>{isAlreadyTracked ? 'Log Sekali Lagi' : 'Auto-Log (T-7)'}</span>
-                  </button>
+                  {!isPastHoliday && (
+                    <button
+                      type="button"
+                      onClick={() => handleLogHoliday(holiday)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-[11px] transition active:scale-95 shadow-xs ${
+                        isAlreadyTracked
+                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                          : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      }`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAlreadyTracked ? 'Log Sekali Lagi' : 'Auto-Log (T-7)'}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

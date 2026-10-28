@@ -72,6 +72,27 @@ interface ServerDatabase {
   subscriptions: webpush.PushSubscription[];
   sentAlerts: Record<string, number>;
   appTitle: string;
+  timezoneOffsetMinutes?: number;
+}
+
+const PROJECT_START_DATE = '2026-10-01';
+
+function isCelebrationServerTask(task: any): boolean {
+  return Boolean(
+    task &&
+      (task.isImportantDate ||
+        task.eventDate ||
+        task.project === 'Perayaan & Cuti' ||
+        (typeof task.title === 'string' && task.title.startsWith('Persediaan Sambutan:')))
+  );
+}
+
+function cleanPreOctoberCelebrationsServer(tasks: any[]): any[] {
+  return tasks.filter((t) => {
+    if (!isCelebrationServerTask(t)) return true;
+    const targetDate = t.eventDate || t.dueDate;
+    return !targetDate || targetDate >= PROJECT_START_DATE;
+  });
 }
 
 function loadDatabase(): ServerDatabase {
@@ -79,12 +100,18 @@ function loadDatabase(): ServerDatabase {
     try {
       const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
       if (Array.isArray(data.tasks)) {
-        return {
-          tasks: data.tasks,
+        const cleanedTasks = cleanPreOctoberCelebrationsServer(data.tasks);
+        const loaded: ServerDatabase = {
+          tasks: cleanedTasks,
           subscriptions: Array.isArray(data.subscriptions) ? data.subscriptions : [],
           sentAlerts: data.sentAlerts || {},
           appTitle: data.appTitle || "Jemah's TaskPulse",
+          timezoneOffsetMinutes: typeof data.timezoneOffsetMinutes === 'number' ? data.timezoneOffsetMinutes : -480,
         };
+        if (cleanedTasks.length !== data.tasks.length) {
+          saveDatabase(loaded);
+        }
+        return loaded;
       }
     } catch (e) {
       console.error('Error loading database:', e);
@@ -97,6 +124,7 @@ function loadDatabase(): ServerDatabase {
     subscriptions: [],
     sentAlerts: {},
     appTitle: "Jemah's TaskPulse",
+    timezoneOffsetMinutes: -480,
   };
   saveDatabase(initialData);
   return initialData;
@@ -188,7 +216,7 @@ app.delete('/api/tasks/:id', (req, res) => {
 app.post('/api/tasks/bulk', (req, res) => {
   const { tasks, appTitle } = req.body;
   if (Array.isArray(tasks)) {
-    db.tasks = tasks;
+    db.tasks = cleanPreOctoberCelebrationsServer(tasks);
     if (appTitle) db.appTitle = appTitle;
     saveDatabase(db);
     broadcastSSE('task_change', { action: 'bulk', tasks: db.tasks });
@@ -314,17 +342,24 @@ app.get('/api/vapid-public-key', (req, res) => {
 });
 
 app.post('/api/notifications/subscribe', (req, res) => {
-  const subscription: webpush.PushSubscription = req.body;
+  const body = req.body || {};
+  const subscription: webpush.PushSubscription = body.subscription || body;
   if (!subscription || !subscription.endpoint) {
     return res.status(400).json({ error: 'Invalid subscription' });
   }
 
-  // Prevent duplicate subscriptions
-  const exists = db.subscriptions.some((s) => s.endpoint === subscription.endpoint);
-  if (!exists) {
-    db.subscriptions.push(subscription);
-    saveDatabase(db);
+  if (typeof body.timezoneOffsetMinutes === 'number') {
+    db.timezoneOffsetMinutes = body.timezoneOffsetMinutes;
   }
+
+  // Update or add subscription
+  const existingIdx = db.subscriptions.findIndex((s) => s.endpoint === subscription.endpoint);
+  if (existingIdx >= 0) {
+    db.subscriptions[existingIdx] = subscription;
+  } else {
+    db.subscriptions.push(subscription);
+  }
+  saveDatabase(db);
 
   res.json({ success: true, subscribed: true });
 });
@@ -333,14 +368,15 @@ app.post('/api/notifications/test', async (req, res) => {
   const payload = JSON.stringify({
     title: "TaskPulse: Background Notification Active! 🔔",
     body: "Your device is connected and will receive reminders even when closed.",
-    icon: "/favicon.ico",
+    icon: "/pwa-192x192.png",
+    badge: "/pwa-192x192.png",
   });
 
   const deadEndpoints: string[] = [];
-  const results = await Promise.allSettled(
+  await Promise.allSettled(
     db.subscriptions.map((sub) =>
       webpush.sendNotification(sub, payload).catch((err) => {
-        if (err.statusCode === 410 || err.statusCode === 404) {
+        if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 401 || err.statusCode === 403) {
           deadEndpoints.push(sub.endpoint);
         }
       })
@@ -357,21 +393,37 @@ app.post('/api/notifications/test', async (req, res) => {
   res.json({ success: true, subscribersNotified: db.subscriptions.length });
 });
 
+// Helper to parse YYYY-MM-DD + HH:MM in the user's local timezone offset
+function parseClientLocalTimestamp(dueDate: string, dueTime: string, tzOffsetMinutes = -480): number {
+  const [y, m, d] = dueDate.split('-').map(Number);
+  const [hh, mm] = (dueTime || '23:59').split(':').map(Number);
+  // Date.UTC treats components as UTC; adding tzOffsetMinutes (Date.getTimezoneOffset(), e.g. -480 for UTC+8) yields true UTC epoch ms
+  return Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0) + tzOffsetMinutes * 60 * 1000;
+}
+
 // Background Deadline Notification Dispatcher
 // Runs continuously on the server, detecting tasks due within 30 min, 2 hours, or overdue
 setInterval(async () => {
   if (db.subscriptions.length === 0) return;
 
-  const now = new Date();
-  const nowMs = now.getTime();
-  const todayKey = now.toISOString().slice(0, 10);
+  const nowMs = Date.now();
+  const tzOffset = typeof db.timezoneOffsetMinutes === 'number' ? db.timezoneOffsetMinutes : -480;
+  const localNow = new Date(nowMs - tzOffset * 60 * 1000);
+  const todayLocalKey = `${localNow.getUTCFullYear()}-${String(localNow.getUTCMonth() + 1).padStart(2, '0')}-${String(localNow.getUTCDate()).padStart(2, '0')}`;
 
-  const activeTasks = db.tasks.filter((t) => t.status !== 'completed' && t.reminderEnabled);
+  const activeTasks = db.tasks.filter((t) => {
+    if (t.status === 'completed' || !t.reminderEnabled) return false;
+    if (isCelebrationServerTask(t)) {
+      const targetDate = t.eventDate || t.dueDate;
+      if (targetDate && targetDate < todayLocalKey) return false;
+    }
+    return true;
+  });
 
   for (const task of activeTasks) {
     if (!task.dueDate) continue;
 
-    const dueMs = new Date(`${task.dueDate}T${task.dueTime || '23:59:00'}`).getTime();
+    const dueMs = parseClientLocalTimestamp(task.dueDate, task.dueTime || '23:59', tzOffset);
     const diffMinutes = Math.round((dueMs - nowMs) / (1000 * 60));
 
     // Alert 1: Due in 30 minutes
@@ -384,6 +436,8 @@ setInterval(async () => {
         const payload = JSON.stringify({
           title: `⚠️ Due in ${diffMinutes}m: ${task.title}`,
           body: `Priority: ${task.priority.toUpperCase()} · Project: ${task.project}`,
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
           tag: `task-${task.id}`,
         });
 
@@ -404,6 +458,8 @@ setInterval(async () => {
         const payload = JSON.stringify({
           title: `⏰ Due in ~${hours}h: ${task.title}`,
           body: `Due today at ${task.dueTime || 'end of day'} (${task.project})`,
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
           tag: `task-${task.id}`,
         });
 

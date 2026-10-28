@@ -14,6 +14,8 @@ import {
   Sparkles,
   Radio,
   Wifi,
+  Bell,
+  BellRing,
 } from 'lucide-react';
 import { P2PSyncStats } from '../types';
 
@@ -33,6 +35,8 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenAIBriefing: () => void;
   onOpenP2PSync?: () => void;
+  notificationPermission?: NotificationPermission | 'default';
+  onEnableNotifications?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -51,6 +55,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenAIBriefing,
   onOpenP2PSync,
+  notificationPermission = 'default',
+  onEnableNotifications,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-150">
@@ -190,6 +196,30 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
           </button>
+
+          {/* Notification Quick Enable / Status */}
+          {onEnableNotifications && (
+            <button
+              type="button"
+              onClick={onEnableNotifications}
+              className="relative p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition"
+              title={
+                notificationPermission === 'granted'
+                  ? 'Notifications enabled (Tap to send test alert)'
+                  : 'Enable notifications & alerts'
+              }
+              aria-label="Notifications"
+            >
+              {notificationPermission === 'granted' ? (
+                <BellRing className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <>
+                  <Bell className="w-4 h-4 text-amber-500" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" />
+                </>
+              )}
+            </button>
+          )}
 
           {/* Sound Mute / Unmute */}
           <button

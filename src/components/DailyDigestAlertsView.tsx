@@ -18,10 +18,14 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Task, UserSettings, TaskPriority, TaskCategory } from '../types';
-import { formatDateKey } from '../utils/date';
-import { triggerNotification, requestNotificationPermission } from '../hooks/useAlerts';
+import { formatDateKey, isPastCelebrationTask } from '../utils/date';
+import { triggerNotification } from '../hooks/useAlerts';
 import { playAlertPing, playCompletionChime, triggerHaptic } from '../utils/audio';
-import { registerServiceWorkerAndPush, triggerServerPushTest } from '../utils/pushNotifications';
+import {
+  registerServiceWorkerAndPush,
+  triggerServerPushTest,
+  isEmbeddedIframe,
+} from '../utils/pushNotifications';
 
 interface DailyDigestAlertsViewProps {
   tasks: Task[];
@@ -30,6 +34,7 @@ interface DailyDigestAlertsViewProps {
   onResetSampleTasks: () => void;
   onImportTasks: (tasks: Task[]) => void;
   onOpenQuickAdd: () => void;
+  onTriggerTestBanner?: (message?: string) => void;
 }
 
 export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
@@ -39,13 +44,19 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
   onResetSampleTasks,
   onImportTasks,
   onOpenQuickAdd,
+  onTriggerTestBanner,
 }) => {
   const [testNotificationSent, setTestNotificationSent] = useState(false);
+  const [pushNotice, setPushNotice] = useState<string | null>(null);
+  const [copiedDirectUrl, setCopiedDirectUrl] = useState(false);
   const [importFeedback, setImportFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+  const inIframe = isEmbeddedIframe();
   const today = formatDateKey();
 
-  // Compute analytics
-  const activeTasks = tasks.filter((t) => t.status !== 'completed');
+  // Compute analytics (leave passed Persediaan Sambutan celebrations peacefully out of overdue/active load)
+  const activeTasks = tasks.filter(
+    (t) => t.status !== 'completed' && !isPastCelebrationTask(t, today)
+  );
   const completedToday = tasks.filter(
     (t) => t.status === 'completed' && t.completedAt?.startsWith(today)
   );
@@ -74,25 +85,73 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
   const handleRequestPermission = async () => {
     const regResult = await registerServiceWorkerAndPush();
     const permission = regResult.permission;
-    onUpdateSettings({ permission, enabled: permission === 'granted' });
+    onUpdateSettings({ permission, enabled: true });
+
     if (permission === 'granted') {
-      triggerNotification("Jemah's TaskPulse: Notifikasi Aktif! 🚀", {
+      setPushNotice(
+        regResult.subscribed
+          ? 'Browser & background Web Push notifications are active!'
+          : 'Browser notifications enabled! In-app & system alerts are active.'
+      );
+      await triggerNotification("Jemah's TaskPulse: Notifikasi Aktif! 🚀", {
         body: `Notifikasi latar belakang & penyegerakan aktif. ${dueTodayTasks.length} tugasan hari ini.`,
       });
+      onTriggerTestBanner?.(
+        `Browser & background notifications enabled! ${dueTodayTasks.length} task(s) scheduled for today.`
+      );
       playCompletionChime(settings.soundEnabled);
       triggerHaptic(40, settings.vibrationEnabled);
+    } else if (regResult.blockedByIframe) {
+      setPushNotice(
+        'In-app banners & sound alerts are active! Browser OS popups are restricted inside embedded preview frames — open the Direct App Link in a full browser tab (or Add to Home Screen on mobile) to unlock OS push popups.'
+      );
+      onTriggerTestBanner?.(
+        'In-app visual banners & audio chimes are active! Open the direct app URL in a standalone browser tab to also allow OS-level push popups.'
+      );
+      playAlertPing(settings.soundEnabled);
+    } else {
+      setPushNotice(
+        'Browser OS permission is currently blocked in site settings. In-app visual banners & audio chimes remain active!'
+      );
+      onTriggerTestBanner?.('In-app visual banners & audio chimes are enabled and active.');
+      playAlertPing(settings.soundEnabled);
     }
   };
 
   const handleTestAlert = async () => {
-    triggerNotification("TaskPulse Alert: Deadline Approaching ⏰", {
+    let currentPerm = settings.permission;
+    if (currentPerm === 'default') {
+      const regResult = await registerServiceWorkerAndPush();
+      currentPerm = regResult.permission;
+      onUpdateSettings({ permission: currentPerm, enabled: true });
+    }
+
+    const osDispatched = await triggerNotification("TaskPulse Alert: Deadline Approaching ⏰", {
       body: "High priority deliverable review scheduled for today. Keep up the great velocity!",
     });
+    const pushRes = await triggerServerPushTest();
+
     playAlertPing(settings.soundEnabled);
     triggerHaptic(50, settings.vibrationEnabled);
-    await triggerServerPushTest();
+
+    onTriggerTestBanner?.(
+      osDispatched || pushRes.subscribersNotified > 0
+        ? 'Test notification dispatched to both your system notification tray and in-app banner!'
+        : inIframe
+        ? 'In-app banner & chime fired! (Open the Direct App URL in a new browser tab if you also want OS system tray popups.)'
+        : 'In-app banner & audio chime fired! Enable browser permission in site settings to also receive OS tray popups.'
+    );
+
     setTestNotificationSent(true);
     setTimeout(() => setTestNotificationSent(false), 4000);
+  };
+
+  const handleCopyDirectUrl = () => {
+    if (typeof window === 'undefined') return;
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopiedDirectUrl(true);
+      setTimeout(() => setCopiedDirectUrl(false), 2500);
+    });
   };
 
   const handleExportBackup = () => {
@@ -204,7 +263,7 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
           {settings.permission === 'granted' ? (
             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800/60 flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Permission Active</span>
+              <span>System Push Active</span>
             </span>
           ) : (
             <button
@@ -217,12 +276,42 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
           )}
         </div>
 
+        {/* Status Summary Strip */}
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="text-slate-700 dark:text-slate-300 font-medium">
+              In-App Banner & Chime Alerts: <strong className="text-emerald-600 dark:text-emerald-400">{settings.enabled ? 'Enabled' : 'Paused'}</strong>
+              {' · '}
+              OS Push: <strong className={settings.permission === 'granted' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+                {settings.permission === 'granted' ? 'Granted' : inIframe ? 'Standalone Tab Required' : settings.permission === 'denied' ? 'Blocked in Browser' : 'Tap Enable Alerts'}
+              </strong>
+            </span>
+          </div>
+
+          {inIframe && settings.permission !== 'granted' && (
+            <button
+              type="button"
+              onClick={handleCopyDirectUrl}
+              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-300 font-semibold text-[11px] hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition"
+            >
+              {copiedDirectUrl ? 'Direct Link Copied!' : 'Copy Direct App Link'}
+            </button>
+          )}
+        </div>
+
+        {pushNotice && (
+          <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 text-xs text-indigo-900 dark:text-indigo-200 leading-relaxed">
+            {pushNotice}
+          </div>
+        )}
+
         {/* Timers & Schedule Inputs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Morning Progress Digest Time</span>
+              <span>Morning Digest</span>
             </label>
             <input
               type="time"
@@ -235,7 +324,7 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Evening Summary Time</span>
+              <span>Evening Summary</span>
             </label>
             <input
               type="time"
@@ -244,19 +333,37 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
               className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200"
             />
           </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              <span>Advance Lead Alert</span>
+            </label>
+            <select
+              value={settings.urgentAlertHoursBefore || 2}
+              onChange={(e) => onUpdateSettings({ urgentAlertHoursBefore: Number(e.target.value) })}
+              className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200"
+            >
+              <option value={1}>1 hour before</option>
+              <option value={2}>2 hours before</option>
+              <option value={4}>4 hours before</option>
+              <option value={8}>8 hours before</option>
+              <option value={24}>24 hours before</option>
+            </select>
+          </div>
         </div>
 
         {/* Test Alert Button */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
           <span className="text-xs text-slate-500">
-            Verify browser notification delivery & sound playback
+            Verify in-app banner, browser push delivery & sound playback
           </span>
           <button
             type="button"
             onClick={handleTestAlert}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-xs transition active:scale-95"
           >
-            <BellRing className="w-3.5 h-3.5 text-indigo-500" />
+            <BellRing className="w-3.5 h-3.5" />
             <span>{testNotificationSent ? 'Alert Dispatched!' : 'Send Test Notification'}</span>
           </button>
         </div>

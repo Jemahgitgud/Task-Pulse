@@ -1,5 +1,5 @@
 import { Task, Subtask } from '../types';
-import { formatDateKey } from '../utils/date';
+import { formatDateKey, isPastCelebrationTask } from '../utils/date';
 
 /**
  * Generate intelligent daily progress briefing via server-side Gemini API
@@ -10,7 +10,7 @@ export async function generateAIBriefing(tasks: Task[]): Promise<{
   recommendedFocus: string;
 }> {
   const today = formatDateKey();
-  const active = tasks.filter((t) => t.status !== 'completed');
+  const active = tasks.filter((t) => t.status !== 'completed' && !isPastCelebrationTask(t, today));
   const completedToday = tasks.filter((t) => t.status === 'completed' && t.completedAt?.startsWith(today)).length;
   const overdue = active.filter((t) => t.dueDate < today);
   const dueToday = active.filter((t) => t.dueDate === today);

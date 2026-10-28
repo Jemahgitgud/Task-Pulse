@@ -16,7 +16,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { Task } from '../types';
-import { formatDateKey, formatDisplayDate, calculatePrepDeadline } from '../utils/date';
+import {
+  formatDateKey,
+  formatDisplayDate,
+  calculatePrepDeadline,
+  isPastCelebrationTask,
+} from '../utils/date';
 import { TaskCard } from './TaskCard';
 import {
   getMalaysianHolidays,
@@ -112,9 +117,13 @@ export const DeadlinesCalendarView: React.FC<DeadlinesCalendarViewProps> = ({
       const key = formatDateKey(d);
 
       const dayTasks = tasks.filter((t) => t.dueDate === key);
-      const active = dayTasks.filter((t) => t.status !== 'completed');
+      const active = dayTasks.filter(
+        (t) => t.status !== 'completed' && !isPastCelebrationTask(t, today)
+      );
       const urgent = active.filter((t) => t.priority === 'urgent');
-      const completed = dayTasks.filter((t) => t.status === 'completed');
+      const completed = dayTasks.filter(
+        (t) => t.status === 'completed' || isPastCelebrationTask(t, today)
+      );
       const isOverdue = key < today && active.length > 0;
       const dayHolidays = holidaysByDate[key] || [];
 

@@ -15,7 +15,12 @@ import {
   ListCheck,
 } from 'lucide-react';
 import { Task, TaskPriority } from '../types';
-import { formatDisplayDate, formatTime12h, getRelativeDeadlineLabel } from '../utils/date';
+import {
+  formatDisplayDate,
+  formatTime12h,
+  getRelativeDeadlineLabel,
+  isPastCelebrationTask,
+} from '../utils/date';
 
 interface TaskCardProps {
   task: Task;
@@ -76,6 +81,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isCompleted = task.status === 'completed';
+  const isPastSambutan = !isCompleted && isPastCelebrationTask(task);
+  const isSettled = isCompleted || isPastSambutan;
   const priorityInfo = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const deadlineInfo = getRelativeDeadlineLabel(task.dueDate, task.dueTime);
 
@@ -85,7 +92,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div
       className={`group relative rounded-2xl border transition-all duration-200 ${
-        isCompleted
+        isSettled
           ? 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800/60 opacity-75'
           : task.pinned
           ? 'bg-white dark:bg-slate-900/90 border-indigo-300/80 dark:border-indigo-700/60 shadow-md shadow-indigo-500/5'
@@ -185,22 +192,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               </span>
 
               {/* Deadline Badge */}
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border ${
-                  deadlineInfo.isOverdue
-                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 font-semibold'
-                    : deadlineInfo.isToday
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/60 font-semibold'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/60'
-                }`}
-              >
-                {deadlineInfo.isOverdue ? (
-                  <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
-                ) : (
+              {isPastSambutan ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/60">
                   <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                )}
-                <span>{deadlineInfo.label}</span>
-              </span>
+                  <span>Sambutan Berlalu</span>
+                </span>
+              ) : isCompleted ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60">
+                  <Check className="w-3 h-3 shrink-0" />
+                  <span>{formatDisplayDate(task.dueDate)}</span>
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium border ${
+                    deadlineInfo.isOverdue
+                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900/60 font-semibold'
+                      : deadlineInfo.isToday
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900/60 font-semibold'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700/60'
+                  }`}
+                >
+                  {deadlineInfo.isOverdue ? (
+                    <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                  ) : (
+                    <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                  )}
+                  <span>{deadlineInfo.label}</span>
+                </span>
+              )}
 
               {/* Time display if scheduled */}
               {task.dueTime && (

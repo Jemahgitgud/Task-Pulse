@@ -13,6 +13,7 @@ import {
   Download,
 } from 'lucide-react';
 import { Task, TaskCategory, TaskPriority, TaskStatus } from '../types';
+import { isPastCelebrationTask } from '../utils/date';
 import { TaskCard } from './TaskCard';
 
 interface WorklistViewProps {
@@ -47,8 +48,8 @@ export const WorklistView: React.FC<WorklistViewProps> = ({
 
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
-      // Status filter
-      if (statusFilter === 'active' && task.status === 'completed') return false;
+      // Status filter (passed Persediaan Sambutan tasks are left quietly in 'all' rather than nagging in 'active')
+      if (statusFilter === 'active' && (task.status === 'completed' || isPastCelebrationTask(task))) return false;
       if (statusFilter === 'completed' && task.status !== 'completed') return false;
 
       // Category filter
@@ -88,7 +89,9 @@ export const WorklistView: React.FC<WorklistViewProps> = ({
   const priorities: string[] = ['All', 'Urgent', 'High', 'Medium', 'Low'];
 
   const completedCount = tasks.filter((t) => t.status === 'completed').length;
-  const activeCount = tasks.filter((t) => t.status !== 'completed').length;
+  const activeCount = tasks.filter(
+    (t) => t.status !== 'completed' && !isPastCelebrationTask(t)
+  ).length;
 
   return (
     <div className="space-y-4 sm:space-y-6">

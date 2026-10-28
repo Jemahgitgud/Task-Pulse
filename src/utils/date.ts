@@ -173,3 +173,41 @@ export function getDaysDifference(fromKey: string, toKey: string): number {
   return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Checks whether a task is a celebration / Persediaan Sambutan milestone
+ */
+export function isCelebrationTask(task: {
+  isImportantDate?: boolean;
+  eventDate?: string;
+  project?: string;
+  title?: string;
+}): boolean {
+  return Boolean(
+    task.isImportantDate ||
+      task.eventDate ||
+      task.project === 'Perayaan & Cuti' ||
+      task.title?.startsWith('Persediaan Sambutan:')
+  );
+}
+
+/**
+ * Returns true if a Persediaan Sambutan / celebration task's event date (or due date)
+ * has already passed, so the app can leave it peacefully without overdue alarms.
+ */
+export function isPastCelebrationTask(
+  task: {
+    status?: string;
+    dueDate: string;
+    isImportantDate?: boolean;
+    eventDate?: string;
+    project?: string;
+    title?: string;
+  },
+  todayKey: string = formatDateKey()
+): boolean {
+  if (!isCelebrationTask(task)) return false;
+  const targetDate = task.eventDate || task.dueDate;
+  return Boolean(targetDate && targetDate < todayKey);
+}
+
+
