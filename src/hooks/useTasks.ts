@@ -10,16 +10,61 @@ const AUTOLOGGED_HOLIDAYS_KEY = 'taskpulse_autologged_holidays_v1';
 const PROJECT_START_DATE = '2026-10-01';
 const UPCOMING_HOLIDAY_LOOKAHEAD_DAYS = 60;
 
+const LEGACY_MALAY_HOLIDAY_MAP: Record<string, { title: string; eventName: string; description: string }> = {
+  '2026-11-08': {
+    title: 'Holiday Prep: Deepavali',
+    eventName: 'Deepavali',
+    description: 'Festival of Lights public holiday (7-day advance reminder)',
+  },
+  '2026-11-09': {
+    title: 'Holiday Prep: Deepavali (Replacement Holiday)',
+    eventName: 'Deepavali (Replacement Holiday)',
+    description: 'Monday replacement holiday for Deepavali',
+  },
+  '2026-12-25': {
+    title: 'Holiday Prep: Christmas Day',
+    eventName: 'Christmas Day',
+    description: 'Christmas Day public holiday (7-day advance reminder)',
+  },
+};
+
 /**
- * Removes Persediaan Sambutan / holiday tasks from before October 2026 (project creation month),
- * while leaving all October 2026+ celebration tasks intact even after their date passes.
+ * Removes pre-October 2026 holiday clutter, strips step-by-step subtask flows,
+ * and translates any cached Malay holiday prep entries to English.
  */
 function cleanPreOctoberCelebrations(list: Task[]): Task[] {
-  return list.filter((t) => {
-    if (!isCelebrationTask(t)) return true;
-    const targetDate = t.eventDate || t.dueDate;
-    return !targetDate || targetDate >= PROJECT_START_DATE;
-  });
+  return list
+    .filter((t) => {
+      if (!isCelebrationTask(t)) return true;
+      const targetDate = t.eventDate || t.dueDate;
+      return !targetDate || targetDate >= PROJECT_START_DATE;
+    })
+    .map((t) => {
+      if (t.eventDate && LEGACY_MALAY_HOLIDAY_MAP[t.eventDate] && t.title.startsWith('Persediaan Sambutan:')) {
+        const mapped = LEGACY_MALAY_HOLIDAY_MAP[t.eventDate];
+        return {
+          ...t,
+          title: mapped.title,
+          eventName: mapped.eventName,
+          description: mapped.description,
+          project: 'Holidays',
+          subtasks: [],
+        };
+      }
+      if (t.title.startsWith('Persediaan Sambutan:')) {
+        const cleanName = t.title.replace(/^Persediaan Sambutan:\s*/, '');
+        return {
+          ...t,
+          title: `Holiday Prep: ${cleanName}`,
+          project: 'Holidays',
+          subtasks: [],
+        };
+      }
+      return {
+        ...t,
+        subtasks: [],
+      };
+    });
 }
 
 function getAutoLoggedHolidayMap(): Record<string, boolean> {
@@ -40,8 +85,8 @@ function saveAutoLoggedHolidayMap(map: Record<string, boolean>) {
 }
 
 /**
- * Automatically logs upcoming Malaysian public holidays (Cuti Umum) within the next 60 days
- * with a T-7 preparation deadline. Remembers logged holidays so manual deletions are respected.
+ * Automatically logs upcoming Malaysian public holidays within the next 60 days
+ * in English with a 7-day advance deadline. Respects manual deletions.
  */
 function ensureUpcomingHolidaysAutoLogged(currentTasks: Task[]): {
   mergedTasks: Task[];
@@ -64,7 +109,6 @@ function ensureUpcomingHolidaysAutoLogged(currentTasks: Task[]): {
   const loggedMap = getAutoLoggedHolidayMap();
   let mapChanged = false;
 
-  // Record any existing celebration eventDates so deleting one later won't re-create it
   for (const t of currentTasks) {
     if (t.eventDate && !loggedMap[t.eventDate]) {
       loggedMap[t.eventDate] = true;
@@ -96,9 +140,9 @@ function ensureUpcomingHolidaysAutoLogged(currentTasks: Task[]): {
 
     const newTask: Task = {
       id: `holiday_prep_${h.date}_${slug}`,
-      title: `Persediaan Sambutan: ${h.name}`,
-      description: h.description || `Persiapan rasmi 7 hari sebelum ${h.name}.`,
-      project: 'Perayaan & Cuti',
+      title: `Holiday Prep: ${h.name}`,
+      description: h.description || `7-day advance reminder before ${h.name}.`,
+      project: 'Holidays',
       priority: 'urgent',
       category: 'Deadline',
       dueDate: prepDueDate,
@@ -112,18 +156,7 @@ function ensureUpcomingHolidaysAutoLogged(currentTasks: Task[]): {
       leadDaysNotice: 7,
       createdAt: nowIso,
       updatedAt: nowIso,
-      subtasks: [
-        {
-          id: `st_${h.date}_1`,
-          title: 'Sediakan perancangan sambutan & semakan jadual',
-          completed: false,
-        },
-        {
-          id: `st_${h.date}_2`,
-          title: 'Selesaikan tugasan kerja sebelum tarikh cuti',
-          completed: false,
-        },
-      ],
+      subtasks: [],
     };
 
     newlyCreated.push(newTask);
@@ -165,26 +198,22 @@ export function getSampleTasks(): Task[] {
     {
       id: 'task-1',
       title: 'Submit Q4 Client Deliverables & Milestone Report',
-      description: 'Finalize presentation deck, summarize deliverable checklist, and send link to stakeholders.',
+      description: 'Send final PDF summary and link to stakeholders.',
       project: 'Client Accounts',
       priority: 'urgent',
       category: 'Deadline',
       dueDate: today,
       dueTime: '17:00',
-      status: 'in_progress',
+      status: 'todo',
       pinned: true,
       reminderEnabled: true,
       createdAt: new Date().toISOString(),
-      subtasks: [
-        { id: 'sub-1', title: 'Export metrics chart and KPI summary', completed: true },
-        { id: 'sub-2', title: 'Review feedback with project lead', completed: true },
-        { id: 'sub-3', title: 'Send final PDF report via email', completed: false },
-      ],
+      subtasks: [],
     },
     {
       id: 'task-overdue',
       title: 'Finalize Vendor Service Agreements & Security NDA',
-      description: 'Review updated terms of service and submit signed addendum.',
+      description: 'Review updated terms and submit signed addendum.',
       project: 'Legal & Ops',
       priority: 'high',
       category: 'Deadline',
@@ -194,15 +223,12 @@ export function getSampleTasks(): Task[] {
       pinned: false,
       reminderEnabled: true,
       createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-      subtasks: [
-        { id: 'sub-od-1', title: 'Verify clause 4.2 data liability', completed: true },
-        { id: 'sub-od-2', title: 'Obtain digital signature', completed: false },
-      ],
+      subtasks: [],
     },
     {
       id: 'task-2',
       title: 'Design Review & Feedback for Mobile Dashboard',
-      description: 'Audit mobile touch ergonomics, bottom navigation layout, and thumb reach zones.',
+      description: 'Check mobile layout and confirm deadline view.',
       project: 'Product Design',
       priority: 'high',
       category: 'Review',
@@ -212,15 +238,12 @@ export function getSampleTasks(): Task[] {
       pinned: false,
       reminderEnabled: true,
       createdAt: new Date().toISOString(),
-      subtasks: [
-        { id: 'sub-4', title: 'Check 44px minimum touch targets', completed: false },
-        { id: 'sub-5', title: 'Verify contrast on high brightness screens', completed: false },
-      ],
+      subtasks: [],
     },
     {
       id: 'task-3',
       title: 'Weekly Standup & Cross-Team Sync',
-      description: 'Cover blockers, active sprint deadlines, and daily progress digest alignment.',
+      description: 'Align on upcoming sprint deadlines.',
       project: 'Team Operations',
       priority: 'medium',
       category: 'Meeting',
@@ -230,12 +253,12 @@ export function getSampleTasks(): Task[] {
       pinned: false,
       reminderEnabled: true,
       createdAt: new Date().toISOString(),
-      subtasks: [{ id: 'sub-6', title: 'Draft 3 bullet talking points', completed: false }],
+      subtasks: [],
     },
     {
       id: 'task-4',
       title: 'Backend API Contract & Authentication Audit',
-      description: 'Ensure token expiration flows and offline cache invalidation rules are robust.',
+      description: 'Verify token expiration and cache rules.',
       project: 'Core Engineering',
       priority: 'medium',
       category: 'Work',
@@ -250,7 +273,7 @@ export function getSampleTasks(): Task[] {
     {
       id: 'task-5',
       title: 'Renew Cloud Hosting & Domain SSL Certs',
-      description: 'Auto-renewal verification for production infrastructure.',
+      description: 'Verify auto-renewal for production domain.',
       project: 'DevOps & Infra',
       priority: 'low',
       category: 'Work',
@@ -261,7 +284,7 @@ export function getSampleTasks(): Task[] {
       pinned: false,
       reminderEnabled: false,
       createdAt: new Date().toISOString(),
-      subtasks: [{ id: 'sub-7', title: 'Check DNS validation status', completed: true }],
+      subtasks: [],
     },
   ];
 }

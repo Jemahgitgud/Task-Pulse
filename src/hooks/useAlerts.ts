@@ -86,7 +86,7 @@ export function useAlerts(tasks: Task[], settings: UserSettings) {
         const dueTimestamp = new Date(`${task.dueDate}T${task.dueTime || '23:59:00'}`).getTime();
         const diffMinutes = Math.round((dueTimestamp - nowTime) / (1000 * 60));
 
-        // 1. Important Date / Celebration 7-Day Alert (T-7 Advance Notice)
+        // 1. Important Date / Holiday 7-Day Advance Alert
         if (task.isImportantDate || task.eventDate) {
           const targetEventDate = task.eventDate || task.dueDate;
           const [ey, em, ed] = targetEventDate.split('-').map(Number);
@@ -103,13 +103,13 @@ export function useAlerts(tasks: Task[], settings: UserSettings) {
                 {
                   id: alertKey,
                   taskId: task.id,
-                  title: `🚨 Peringatan 7 Hari: ${eventLabel}`,
-                  message: `Tepat 7 hari sebelum ${targetEventDate}! Tarikh akhir persediaan (dateline) adalah hari ini.`,
+                  title: `7-Day Reminder: ${eventLabel}`,
+                  message: `7 days until ${targetEventDate}. Preparation deadline is scheduled for today.`,
                   urgency: 'warning',
                   timestamp: Date.now(),
                 },
-                `🚨 Peringatan 7 Hari: ${eventLabel}`,
-                `Tepat 7 hari menjelang acara (${targetEventDate})! Tarikh akhir persediaan dijadualkan hari ini.`,
+                `7-Day Reminder: ${eventLabel}`,
+                `7 days until ${targetEventDate} — preparation deadline is today.`,
                 50
               );
               return;

@@ -9,7 +9,7 @@ export function formatDateKey(date: Date = new Date()): string {
 }
 
 /**
- * Returns user-friendly date label like "Today, Oct 27" or "Thursday, Oct 29"
+ * Returns user-friendly date label like "Today, Oct 28" or "Thu, Oct 29"
  */
 export function formatDisplayDate(dateStr: string): string {
   try {
@@ -37,90 +37,15 @@ export function formatDisplayDate(dateStr: string): string {
       return `Yesterday, ${month} ${dayNum}`;
     }
 
+    const currentYear = new Date().getFullYear();
+    if (y !== currentYear) {
+      return `${month} ${dayNum}, ${y}`;
+    }
+
     return `${weekday}, ${month} ${dayNum}`;
   } catch {
     return dateStr;
   }
-}
-
-/**
- * Returns human-readable relative deadline tag
- */
-export function getRelativeDeadlineLabel(dueDate: string, dueTime?: string): {
-  label: string;
-  isOverdue: boolean;
-  isToday: boolean;
-  urgencyColor: 'red' | 'amber' | 'emerald' | 'slate';
-} {
-  const today = formatDateKey();
-  const now = new Date();
-
-  if (dueDate < today) {
-    const diffDays = Math.max(1, Math.round((new Date().getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24)));
-    return {
-      label: `Overdue ${diffDays}d`,
-      isOverdue: true,
-      isToday: false,
-      urgencyColor: 'red',
-    };
-  }
-
-  if (dueDate === today) {
-    if (dueTime) {
-      const [h, m] = dueTime.split(':').map(Number);
-      const dueMoment = new Date();
-      dueMoment.setHours(h, m, 0, 0);
-      const diffMinutes = Math.round((dueMoment.getTime() - now.getTime()) / (1000 * 60));
-
-      if (diffMinutes < 0) {
-        return {
-          label: `Overdue (${dueTime})`,
-          isOverdue: true,
-          isToday: true,
-          urgencyColor: 'red',
-        };
-      }
-      if (diffMinutes <= 60) {
-        return {
-          label: `Due in ${diffMinutes}m`,
-          isOverdue: false,
-          isToday: true,
-          urgencyColor: 'red',
-        };
-      }
-      return {
-        label: `Today @ ${dueTime}`,
-        isOverdue: false,
-        isToday: true,
-        urgencyColor: 'amber',
-      };
-    }
-    return {
-      label: 'Due Today',
-      isOverdue: false,
-      isToday: true,
-      urgencyColor: 'amber',
-    };
-  }
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  if (dueDate === formatDateKey(tomorrow)) {
-    return {
-      label: dueTime ? `Tomorrow @ ${dueTime}` : 'Tomorrow',
-      isOverdue: false,
-      isToday: false,
-      urgencyColor: 'emerald',
-    };
-  }
-
-  const diffDays = Math.round((new Date(dueDate).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
-  return {
-    label: `In ${diffDays} days`,
-    isOverdue: false,
-    isToday: false,
-    urgencyColor: 'slate',
-  };
 }
 
 /**
@@ -133,6 +58,134 @@ export function formatTime12h(time24?: string): string {
   const ampm = h >= 12 ? 'PM' : 'AM';
   const hour12 = h % 12 || 12;
   return `${hour12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Returns difference in calendar days between two YYYY-MM-DD strings
+ */
+export function getDaysDifference(fromKey: string, toKey: string): number {
+  const [y1, m1, d1] = fromKey.split('-').map(Number);
+  const [y2, m2, d2] = toKey.split('-').map(Number);
+  const date1 = new Date(y1, m1 - 1, d1);
+  const date2 = new Date(y2, m2 - 1, d2);
+  return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Returns human-readable relative deadline countdown for quick deadline scanning
+ */
+export function getRelativeDeadlineLabel(dueDate: string, dueTime?: string): {
+  label: string;
+  isOverdue: boolean;
+  isToday: boolean;
+  isSoon: boolean;
+  daysLeft: number;
+  urgencyColor: 'red' | 'amber' | 'emerald' | 'slate';
+} {
+  const today = formatDateKey();
+  const now = new Date();
+  const daysLeft = getDaysDifference(today, dueDate);
+  const formattedTime = dueTime ? formatTime12h(dueTime) : '';
+
+  if (daysLeft < 0) {
+    const overdueDays = Math.abs(daysLeft);
+    return {
+      label: overdueDays === 1 ? 'Overdue by 1d' : `Overdue by ${overdueDays}d`,
+      isOverdue: true,
+      isToday: false,
+      isSoon: true,
+      daysLeft,
+      urgencyColor: 'red',
+    };
+  }
+
+  if (daysLeft === 0) {
+    if (dueTime) {
+      const [h, m] = dueTime.split(':').map(Number);
+      const dueMoment = new Date();
+      dueMoment.setHours(h, m, 0, 0);
+      const diffMinutes = Math.round((dueMoment.getTime() - now.getTime()) / (1000 * 60));
+
+      if (diffMinutes < 0) {
+        return {
+          label: `Overdue · ${formattedTime}`,
+          isOverdue: true,
+          isToday: true,
+          isSoon: true,
+          daysLeft: 0,
+          urgencyColor: 'red',
+        };
+      }
+      if (diffMinutes <= 60) {
+        return {
+          label: `Due in ${diffMinutes}m`,
+          isOverdue: false,
+          isToday: true,
+          isSoon: true,
+          daysLeft: 0,
+          urgencyColor: 'red',
+        };
+      }
+      const hoursLeft = Math.round(diffMinutes / 60);
+      if (hoursLeft <= 6) {
+        return {
+          label: `Due in ${hoursLeft}h · ${formattedTime}`,
+          isOverdue: false,
+          isToday: true,
+          isSoon: true,
+          daysLeft: 0,
+          urgencyColor: 'amber',
+        };
+      }
+      return {
+        label: `Today · ${formattedTime}`,
+        isOverdue: false,
+        isToday: true,
+        isSoon: true,
+        daysLeft: 0,
+        urgencyColor: 'amber',
+      };
+    }
+    return {
+      label: 'Due Today',
+      isOverdue: false,
+      isToday: true,
+      isSoon: true,
+      daysLeft: 0,
+      urgencyColor: 'amber',
+    };
+  }
+
+  if (daysLeft === 1) {
+    return {
+      label: formattedTime ? `Tomorrow · ${formattedTime}` : 'Tomorrow',
+      isOverdue: false,
+      isToday: false,
+      isSoon: true,
+      daysLeft: 1,
+      urgencyColor: 'amber',
+    };
+  }
+
+  if (daysLeft <= 7) {
+    return {
+      label: `In ${daysLeft} days`,
+      isOverdue: false,
+      isToday: false,
+      isSoon: true,
+      daysLeft,
+      urgencyColor: daysLeft <= 3 ? 'amber' : 'emerald',
+    };
+  }
+
+  return {
+    label: `In ${daysLeft} days`,
+    isOverdue: false,
+    isToday: false,
+    isSoon: false,
+    daysLeft,
+    urgencyColor: 'slate',
+  };
 }
 
 /**
@@ -163,18 +216,7 @@ export function calculatePrepDeadline(eventDateStr: string, leadDays: number = 7
 }
 
 /**
- * Returns difference in days between two YYYY-MM-DD date strings
- */
-export function getDaysDifference(fromKey: string, toKey: string): number {
-  const [y1, m1, d1] = fromKey.split('-').map(Number);
-  const [y2, m2, d2] = toKey.split('-').map(Number);
-  const date1 = new Date(y1, m1 - 1, d1);
-  const date2 = new Date(y2, m2 - 1, d2);
-  return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-/**
- * Checks whether a task is a celebration / Persediaan Sambutan milestone
+ * Checks whether a task is a holiday / celebration milestone
  */
 export function isCelebrationTask(task: {
   isImportantDate?: boolean;
@@ -185,14 +227,16 @@ export function isCelebrationTask(task: {
   return Boolean(
     task.isImportantDate ||
       task.eventDate ||
+      task.project === 'Holidays' ||
       task.project === 'Perayaan & Cuti' ||
+      task.title?.startsWith('Holiday Prep:') ||
       task.title?.startsWith('Persediaan Sambutan:')
   );
 }
 
 /**
- * Returns true if a Persediaan Sambutan / celebration task's event date (or due date)
- * has already passed, so the app can leave it peacefully without overdue alarms.
+ * Returns true if a holiday / celebration task's event date (or due date)
+ * has already passed, so the app leaves it quietly without overdue alarms.
  */
 export function isPastCelebrationTask(
   task: {
@@ -209,5 +253,3 @@ export function isPastCelebrationTask(
   const targetDate = task.eventDate || task.dueDate;
   return Boolean(targetDate && targetDate < todayKey);
 }
-
-

@@ -1,40 +1,70 @@
 {
   "tasks": [
     {
-      "title": "Persediaan Sambutan: Hari Krismas",
-      "description": "Cuti Umum Hari Krismas (Christmas Day)",
-      "project": "Perayaan & Cuti",
+      "id": "task-1",
+      "title": "Submit Q4 Client Deliverables & Milestone Report",
+      "description": "Finalize presentation deck and send report link to stakeholders.",
+      "project": "Client Accounts",
       "priority": "urgent",
       "category": "Deadline",
-      "dueDate": "2026-12-18",
-      "dueTime": "09:00",
+      "dueDate": "2026-10-28",
+      "dueTime": "17:00",
+      "status": "todo",
+      "pinned": true,
+      "reminderEnabled": true,
+      "createdAt": "2026-10-28T02:16:01.857Z",
+      "subtasks": []
+    },
+    {
+      "id": "task-2",
+      "title": "Design Review & Feedback for Mobile Dashboard",
+      "description": "Check mobile layout and confirm deadline tracking view.",
+      "project": "Product Design",
+      "priority": "high",
+      "category": "Review",
+      "dueDate": "2026-10-28",
+      "dueTime": "15:30",
       "status": "todo",
       "pinned": false,
       "reminderEnabled": true,
-      "isImportantDate": true,
-      "eventDate": "2026-12-25",
-      "eventName": "Hari Krismas",
-      "leadDaysNotice": 7,
-      "subtasks": [
-        {
-          "id": "st_1793154012521_19_1",
-          "title": "Sediakan perancangan sambutan & semakan jadual",
-          "completed": false
-        },
-        {
-          "id": "st_1793154012521_19_2",
-          "title": "Selesaikan tugasan kerja sebelum tarikh cuti",
-          "completed": false
-        }
-      ],
-      "id": "task_1793154012521_xvd5s7",
-      "createdAt": "2026-10-28T02:20:12.521Z",
-      "updatedAt": "2026-10-28T02:20:12.521Z"
+      "createdAt": "2026-10-28T02:16:01.860Z",
+      "subtasks": []
     },
     {
-      "title": "Persediaan Sambutan: Hari Deepavali",
-      "description": "Cuti Umum Perayaan Pesta Cahaya Deepavali",
-      "project": "Perayaan & Cuti",
+      "id": "task-3",
+      "title": "Weekly Standup & Cross-Team Sync",
+      "description": "Align on active sprint deadlines.",
+      "project": "Team Operations",
+      "priority": "medium",
+      "category": "Meeting",
+      "dueDate": "2026-10-29",
+      "dueTime": "10:00",
+      "status": "todo",
+      "pinned": false,
+      "reminderEnabled": true,
+      "createdAt": "2026-10-28T02:16:01.860Z",
+      "subtasks": []
+    },
+    {
+      "id": "task-4",
+      "title": "Backend API Contract & Authentication Audit",
+      "description": "Verify token expiration and cache invalidation rules.",
+      "project": "Core Engineering",
+      "priority": "medium",
+      "category": "Work",
+      "dueDate": "2026-10-30",
+      "dueTime": "18:00",
+      "status": "todo",
+      "pinned": false,
+      "reminderEnabled": false,
+      "createdAt": "2026-10-28T02:16:01.860Z",
+      "subtasks": []
+    },
+    {
+      "id": "task_1793154012521_fo2t8j",
+      "title": "Holiday Prep: Deepavali",
+      "description": "Festival of Lights public holiday (7-day advance reminder)",
+      "project": "Holidays",
       "priority": "urgent",
       "category": "Deadline",
       "dueDate": "2026-11-01",
@@ -44,28 +74,17 @@
       "reminderEnabled": true,
       "isImportantDate": true,
       "eventDate": "2026-11-08",
-      "eventName": "Hari Deepavali",
+      "eventName": "Deepavali",
       "leadDaysNotice": 7,
-      "subtasks": [
-        {
-          "id": "st_1793154012521_17_1",
-          "title": "Sediakan perancangan sambutan & semakan jadual",
-          "completed": false
-        },
-        {
-          "id": "st_1793154012521_17_2",
-          "title": "Selesaikan tugasan kerja sebelum tarikh cuti",
-          "completed": false
-        }
-      ],
-      "id": "task_1793154012521_fo2t8j",
+      "subtasks": [],
       "createdAt": "2026-10-28T02:20:12.521Z",
       "updatedAt": "2026-10-28T02:20:12.521Z"
     },
     {
-      "title": "Persediaan Sambutan: Cuti Ganti Hari Deepavali",
-      "description": "Cuti Ganti bagi perayaan yang jatuh pada hari Ahad (Hari Deepavali)",
-      "project": "Perayaan & Cuti",
+      "id": "task_1793154012521_ujiunz",
+      "title": "Holiday Prep: Deepavali (Replacement Holiday)",
+      "description": "Monday replacement holiday for Deepavali",
+      "project": "Holidays",
       "priority": "urgent",
       "category": "Deadline",
       "dueDate": "2026-11-02",
@@ -75,54 +94,31 @@
       "reminderEnabled": true,
       "isImportantDate": true,
       "eventDate": "2026-11-09",
-      "eventName": "Cuti Ganti Hari Deepavali",
+      "eventName": "Deepavali (Replacement Holiday)",
       "leadDaysNotice": 7,
-      "subtasks": [
-        {
-          "id": "st_1793154012521_18_1",
-          "title": "Sediakan perancangan sambutan & semakan jadual",
-          "completed": false
-        },
-        {
-          "id": "st_1793154012521_18_2",
-          "title": "Selesaikan tugasan kerja sebelum tarikh cuti",
-          "completed": false
-        }
-      ],
-      "id": "task_1793154012521_ujiunz",
+      "subtasks": [],
       "createdAt": "2026-10-28T02:20:12.521Z",
       "updatedAt": "2026-10-28T02:20:12.521Z"
     },
     {
-      "id": "task-1",
-      "title": "Submit Q4 Client Deliverables & Milestone Report",
-      "description": "Finalize presentation deck, summarize deliverable checklist, and send link to stakeholders.",
-      "project": "Client Accounts",
+      "id": "task_1793154012521_xvd5s7",
+      "title": "Holiday Prep: Christmas Day",
+      "description": "Christmas Day public holiday (7-day advance reminder)",
+      "project": "Holidays",
       "priority": "urgent",
       "category": "Deadline",
-      "dueDate": "2026-10-28",
-      "dueTime": "17:00",
-      "status": "in_progress",
-      "pinned": true,
+      "dueDate": "2026-12-18",
+      "dueTime": "09:00",
+      "status": "todo",
+      "pinned": false,
       "reminderEnabled": true,
-      "createdAt": "2026-10-28T02:16:01.857Z",
-      "subtasks": [
-        {
-          "id": "sub-1",
-          "title": "Export metrics chart and KPI summary",
-          "completed": true
-        },
-        {
-          "id": "sub-2",
-          "title": "Review feedback with project lead",
-          "completed": true
-        },
-        {
-          "id": "sub-3",
-          "title": "Send final PDF report via email",
-          "completed": false
-        }
-      ]
+      "isImportantDate": true,
+      "eventDate": "2026-12-25",
+      "eventName": "Christmas Day",
+      "leadDaysNotice": 7,
+      "subtasks": [],
+      "createdAt": "2026-10-28T02:20:12.521Z",
+      "updatedAt": "2026-10-28T02:20:12.521Z"
     },
     {
       "id": "task-overdue",
@@ -137,82 +133,9 @@
       "pinned": false,
       "reminderEnabled": true,
       "createdAt": "2026-10-26T02:16:01.860Z",
-      "subtasks": [
-        {
-          "id": "sub-od-1",
-          "title": "Verify clause 4.2 data liability",
-          "completed": true
-        },
-        {
-          "id": "sub-od-2",
-          "title": "Obtain digital signature",
-          "completed": false
-        }
-      ],
+      "subtasks": [],
       "completedAt": "2026-10-28T02:31:06.092Z",
       "updatedAt": "2026-10-28T02:31:06.092Z"
-    },
-    {
-      "id": "task-2",
-      "title": "Design Review & Feedback for Mobile Dashboard",
-      "description": "Audit mobile touch ergonomics, bottom navigation layout, and thumb reach zones.",
-      "project": "Product Design",
-      "priority": "high",
-      "category": "Review",
-      "dueDate": "2026-10-28",
-      "dueTime": "15:30",
-      "status": "todo",
-      "pinned": false,
-      "reminderEnabled": true,
-      "createdAt": "2026-10-28T02:16:01.860Z",
-      "subtasks": [
-        {
-          "id": "sub-4",
-          "title": "Check 44px minimum touch targets",
-          "completed": false
-        },
-        {
-          "id": "sub-5",
-          "title": "Verify contrast on high brightness screens",
-          "completed": false
-        }
-      ]
-    },
-    {
-      "id": "task-3",
-      "title": "Weekly Standup & Cross-Team Sync",
-      "description": "Cover blockers, active sprint deadlines, and daily progress digest alignment.",
-      "project": "Team Operations",
-      "priority": "medium",
-      "category": "Meeting",
-      "dueDate": "2026-10-29",
-      "dueTime": "10:00",
-      "status": "todo",
-      "pinned": false,
-      "reminderEnabled": true,
-      "createdAt": "2026-10-28T02:16:01.860Z",
-      "subtasks": [
-        {
-          "id": "sub-6",
-          "title": "Draft 3 bullet talking points",
-          "completed": false
-        }
-      ]
-    },
-    {
-      "id": "task-4",
-      "title": "Backend API Contract & Authentication Audit",
-      "description": "Ensure token expiration flows and offline cache invalidation rules are robust.",
-      "project": "Core Engineering",
-      "priority": "medium",
-      "category": "Work",
-      "dueDate": "2026-10-30",
-      "dueTime": "18:00",
-      "status": "todo",
-      "pinned": false,
-      "reminderEnabled": false,
-      "createdAt": "2026-10-28T02:16:01.860Z",
-      "subtasks": []
     },
     {
       "id": "task-5",
@@ -228,13 +151,7 @@
       "pinned": false,
       "reminderEnabled": false,
       "createdAt": "2026-10-28T02:16:01.860Z",
-      "subtasks": [
-        {
-          "id": "sub-7",
-          "title": "Check DNS validation status",
-          "completed": true
-        }
-      ]
+      "subtasks": []
     }
   ],
   "subscriptions": [],

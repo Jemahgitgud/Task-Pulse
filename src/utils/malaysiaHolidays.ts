@@ -1,54 +1,45 @@
 /**
- * Malaysian Celebrations & Public Holidays Engine
- * 
- * Supports all celebrations from the Malaysian National & State Calendar
- * including Islamic Hijri celebrations, Chinese New Year, Deepavali, Wesak,
- * national holidays, United Nations observance days, and exam milestones.
- * 
- * Accurately calibrated for 2026 (matching the user's uploaded official schedule)
- * and calculates dynamic celebrations year-by-year automatically.
+ * Malaysian Public Holidays & Observances Calendar (English)
+ *
+ * Supports official federal/state public holidays and observances,
+ * calibrated for 2025–2028+ with automatic year-by-year calculation.
  */
 
 export interface MalaysiaHoliday {
   id: string;
   date: string; // YYYY-MM-DD
-  dayName: string; // Khamis, Jumaat, etc.
-  name: string; // Hari Raya Puasa, etc.
+  dayName: string; // Thu, Fri, etc.
+  name: string; // Deepavali, Hari Raya Aidilfitri, etc.
   type: 'public_holiday' | 'islamic' | 'cultural' | 'national' | 'international' | 'exam';
   isPublicHoliday: boolean;
   description?: string;
   icon?: string;
 }
 
-// Day of week in Bahasa Melayu
-const BM_DAYS = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+const EN_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export function getBMDayName(date: Date): string {
-  return BM_DAYS[date.getDay()];
+export function getDayName(date: Date): string {
+  return EN_DAYS[date.getDay()];
 }
 
-/**
- * Verified astronomical dates for variable lunar/Hijri/Hindu holidays in Malaysia.
- * For years beyond the table, astronomical projection formulas calculate the exact dates.
- */
 interface VariableHolidaysData {
-  israkMikraj: string; // 27 Rejab
-  nisfuSyaaban: string; // 15 Syaaban
-  tahunBaruCina: string; // CNY Day 1
-  tahunBaruCina2: string; // CNY Day 2
-  awalRamadan: string; // 1 Ramadan
-  nuzulQuran: string; // 17 Ramadan
-  hariRayaPuasa: string; // 1 Syawal
-  hariRayaPuasa2: string; // 2 Syawal
-  awalZulhijjah: string; // 1 Zulhijjah
-  hariArafah: string; // 9 Zulhijjah
-  hariRayaHaji: string; // 10 Zulhijjah
-  hariRayaHaji2: string; // 11 Zulhijjah
-  hariWesak: string; // Wesak Day (Full Moon of Vaisakha)
-  awalMuharram: string; // 1 Muharram (Maal Hijrah)
-  hariAsyura: string; // 10 Muharram
-  maulidurRasul: string; // 12 Rabiulawal
-  deepavali: string; // Deepavali
+  israkMikraj: string;
+  nisfuSyaaban: string;
+  tahunBaruCina: string;
+  tahunBaruCina2: string;
+  awalRamadan: string;
+  nuzulQuran: string;
+  hariRayaPuasa: string;
+  hariRayaPuasa2: string;
+  awalZulhijjah: string;
+  hariArafah: string;
+  hariRayaHaji: string;
+  hariRayaHaji2: string;
+  hariWesak: string;
+  awalMuharram: string;
+  hariAsyura: string;
+  maulidurRasul: string;
+  deepavali: string;
 }
 
 const VERIFIED_YEARS: Record<number, VariableHolidaysData> = {
@@ -72,7 +63,6 @@ const VERIFIED_YEARS: Record<number, VariableHolidaysData> = {
     deepavali: '2025-10-20',
   },
   2026: {
-    // Exactly matches the user's official uploaded image for 2026!
     israkMikraj: '2026-01-17',
     nisfuSyaaban: '2026-02-02',
     tahunBaruCina: '2026-02-17',
@@ -131,20 +121,15 @@ const VERIFIED_YEARS: Record<number, VariableHolidaysData> = {
   },
 };
 
-/**
- * Calculates variable holidays for any year (even 2029, 2030, 2035...)
- * using astronomical shift constants (Islamic calendar shifts back ~10.87 days/solar year).
- */
 function getVariableHolidaysForYear(year: number): VariableHolidaysData {
   if (VERIFIED_YEARS[year]) {
     return VERIFIED_YEARS[year];
   }
 
-  // Calculate shift relative to 2026
   const diffYears = year - 2026;
   const shiftDays = Math.round(diffYears * -10.875);
-
   const base2026 = VERIFIED_YEARS[2026];
+
   const shiftDate = (dateStr: string, daysToAdd: number): string => {
     const d = new Date(`${dateStr}T12:00:00`);
     d.setFullYear(d.getFullYear() + diffYears);
@@ -155,11 +140,8 @@ function getVariableHolidaysForYear(year: number): VariableHolidaysData {
     return `${y}-${m}-${day}`;
   };
 
-  // Chinese New Year shifts by lunar cycle (Metonic ~11 days earlier or 19 days later in leap lunar month)
-  // Approximate CNY date
-  const cnyBase = new Date('2026-02-17T12:00:00');
-  const cnyShift = ((diffYears * 11) % 30);
-  const cnyEst = new Date(year, 0, 21 + (30 - cnyShift) % 30);
+  const cnyShift = (diffYears * 11) % 30;
+  const cnyEst = new Date(year, 0, 21 + ((30 - cnyShift) % 30));
   const cnyStr = cnyEst.toISOString().slice(0, 10);
   const cnyNext = new Date(cnyEst);
   cnyNext.setDate(cnyNext.getDate() + 1);
@@ -185,9 +167,6 @@ function getVariableHolidaysForYear(year: number): VariableHolidaysData {
   };
 }
 
-/**
- * Returns the N-th weekday of a month (e.g. 2nd Sunday of May = Hari Ibu)
- */
 function getNthWeekdayOfMonth(year: number, monthIndex: number, targetWeekday: number, n: number): string {
   let count = 0;
   for (let day = 1; day <= 31; day++) {
@@ -205,398 +184,198 @@ function getNthWeekdayOfMonth(year: number, monthIndex: number, targetWeekday: n
   return `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
 }
 
-/**
- * Generates all Malaysian public holidays and celebrations for any year.
- */
 export function getMalaysianHolidays(year: number): MalaysiaHoliday[] {
   const vars = getVariableHolidaysForYear(year);
 
-  // Computed dynamic dates
-  const hariIbu = getNthWeekdayOfMonth(year, 4, 0, 2); // 2nd Sunday of May (Month 4 in 0-indexed)
-  const hariBapa = getNthWeekdayOfMonth(year, 5, 0, 3); // 3rd Sunday of June (Month 5 in 0-indexed)
-  const agongBirthday = getNthWeekdayOfMonth(year, 5, 1, 1); // 1st Monday of June (Hari Keputeraan YDP Agong)
-  const hariSukanNegara = getNthWeekdayOfMonth(year, 9, 6, 2); // 2nd Saturday of October
+  const mothersDay = getNthWeekdayOfMonth(year, 4, 0, 2);
+  const fathersDay = getNthWeekdayOfMonth(year, 5, 0, 3);
+  const agongBirthday = getNthWeekdayOfMonth(year, 5, 1, 1);
+  const nationalSportsDay = getNthWeekdayOfMonth(year, 9, 6, 2);
 
-  // Raw list matching the user's 47 official items
   const rawEvents: Array<{
     date: string;
     name: string;
     type: MalaysiaHoliday['type'];
     isPublicHoliday: boolean;
     description?: string;
-    icon?: string;
   }> = [
     {
       date: `${year}-01-01`,
-      name: `Hari Tahun Baru ${year}`,
+      name: `New Year's Day ${year}`,
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Cuti Umum Hari Tahun Baru',
-      icon: '🎉',
+      description: 'New Year public holiday',
     },
     {
       date: vars.israkMikraj,
-      name: 'Israk dan Mikraj',
+      name: 'Israk & Mikraj',
       type: 'islamic',
       isPublicHoliday: false,
-      description: 'Peringatan peristiwa Israk dan Mikraj Nabi Muhammad SAW',
-      icon: '🕌',
-    },
-    {
-      date: vars.nisfuSyaaban,
-      name: 'Nisfu Syaaban',
-      type: 'islamic',
-      isPublicHoliday: false,
-      description: 'Malam Nisfu Syaaban',
-      icon: '🌙',
+      description: 'Islamic observance of Isra and Miraj',
     },
     {
       date: vars.tahunBaruCina,
-      name: 'Tahun Baru Cina',
+      name: 'Chinese New Year',
       type: 'cultural',
       isPublicHoliday: true,
-      description: 'Cuti Umum Perayaan Tahun Baru Cina (Hari Pertama)',
-      icon: '🧧',
+      description: 'Lunar New Year public holiday (Day 1)',
     },
     {
       date: vars.tahunBaruCina2,
-      name: 'Tahun Baru Cina (Hari Kedua)',
+      name: 'Chinese New Year (Day 2)',
       type: 'cultural',
       isPublicHoliday: true,
-      description: 'Cuti Umum Perayaan Tahun Baru Cina (Hari Kedua)',
-      icon: '🧧',
+      description: 'Lunar New Year public holiday (Day 2)',
     },
     {
       date: vars.awalRamadan,
-      name: 'Awal Ramadan / Berpuasa',
+      name: 'Start of Ramadan',
       type: 'islamic',
       isPublicHoliday: false,
-      description: 'Permulaan ibadah puasa bulan Ramadan 1447H',
-      icon: '🌙',
-    },
-    {
-      date: `${year}-03-04`,
-      name: 'Hari Ulang Tahun Pertabalan Sultan Terengganu',
-      type: 'national',
-      isPublicHoliday: false,
-      description: 'Hari Ulang Tahun Pertabalan Sultan Terengganu',
-      icon: '👑',
+      description: 'First day of Ramadan fasting month',
     },
     {
       date: vars.nuzulQuran,
-      name: 'Hari Nuzul Al-Quran',
+      name: 'Nuzul Al-Quran',
       type: 'islamic',
       isPublicHoliday: true,
-      description: 'Peringatan Nuzul Al-Quran (17 Ramadan)',
-      icon: '📖',
-    },
-    {
-      date: `${year}-03-08`,
-      name: 'Hari Wanita Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'International Women\'s Day',
-      icon: '🌸',
+      description: '17th day of Ramadan public holiday',
     },
     {
       date: vars.hariRayaPuasa,
-      name: 'Hari Raya Puasa (Hari Raya Aidilfitri)',
+      name: 'Hari Raya Aidilfitri',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Hari Raya Aidilfitri (1 Syawal) - Sambutan kemenangan umat Islam',
-      icon: '✨',
+      description: 'Eid al-Fitr public holiday (Day 1)',
     },
     {
       date: vars.hariRayaPuasa2,
-      name: 'Hari Raya Puasa (Hari Kedua)',
+      name: 'Hari Raya Aidilfitri (Day 2)',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Hari Raya Aidilfitri Hari Kedua (2 Syawal)',
-      icon: '✨',
-    },
-    {
-      date: `${year}-03-25`,
-      name: 'Peringatan Hari Polis',
-      type: 'national',
-      isPublicHoliday: false,
-      description: 'Hari Peringatan Pasukan Polis Diraja Malaysia (PDRM)',
-      icon: '👮‍♂️',
-    },
-    {
-      date: `${year}-04-07`,
-      name: 'Hari Kesihatan Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'World Health Day',
-      icon: '🩺',
-    },
-    {
-      date: `${year}-04-22`,
-      name: 'Hari Bumi',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'Earth Day - Pemeliharaan Alam Sekitar Sedunia',
-      icon: '🌍',
-    },
-    {
-      date: `${year}-04-26`,
-      name: 'Hari Keputeraan Sultan Terengganu',
-      type: 'national',
-      isPublicHoliday: false,
-      description: 'Sambutan Hari Keputeraan Sultan Terengganu',
-      icon: '👑',
+      description: 'Eid al-Fitr public holiday (Day 2)',
     },
     {
       date: `${year}-05-01`,
-      name: 'Hari Pekerja & Hari Keselamatan/Kesihatan Pekerjaan',
+      name: 'Labour Day',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Cuti Umum Hari Pekerja Antarabangsa (Labour Day)',
-      icon: '💼',
+      description: 'International Workers Day public holiday',
     },
     {
-      date: hariIbu,
-      name: 'Hari Ibu',
+      date: mothersDay,
+      name: "Mother's Day",
       type: 'cultural',
       isPublicHoliday: false,
-      description: 'Sambutan Hari Ibu (Ahad kedua bulan Mei)',
-      icon: '💐',
-    },
-    {
-      date: `${year}-05-12`,
-      name: 'Hari Jururawat Antarabangsa',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'International Nurses Day',
-      icon: '👩‍⚕️',
-    },
-    {
-      date: `${year}-05-15`,
-      name: 'Hari Belia Negara',
-      type: 'national',
-      isPublicHoliday: false,
-      description: 'Hari Belia Negara (Malaysia)',
-      icon: '⚡',
-    },
-    {
-      date: `${year}-05-16`,
-      name: 'Hari Guru Kebangsaan (Malaysia)',
-      type: 'national',
-      isPublicHoliday: false,
-      description: 'Terima kasih Cikgu! Sambutan Hari Guru Kebangsaan',
-      icon: '📚',
-    },
-    {
-      date: vars.awalZulhijjah,
-      name: 'Awal Zulhijjah',
-      type: 'islamic',
-      isPublicHoliday: false,
-      description: 'Permulaan 10 hari terawal bulan Zulhijjah',
-      icon: '🕋',
-    },
-    {
-      date: vars.hariArafah,
-      name: 'Hari Arafah',
-      type: 'islamic',
-      isPublicHoliday: false,
-      description: 'Hari Wukuf di Arafah bagi jemaah haji & sunat berpuasa',
-      icon: '🤲',
+      description: 'Second Sunday of May',
     },
     {
       date: vars.hariRayaHaji,
-      name: 'Hari Raya Haji (Hari Raya Aidiladha)',
+      name: 'Hari Raya Haji (Eid al-Adha)',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Hari Raya Korban / Aidiladha (10 Zulhijjah)',
-      icon: '🐑',
+      description: 'Eid al-Adha public holiday',
     },
     {
       date: vars.hariRayaHaji2,
-      name: 'Hari Raya Haji (Hari Kedua)',
+      name: 'Hari Raya Haji (Day 2)',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Hari Tasyrik & Sambutan Aidiladha Hari Kedua',
-      icon: '🐑',
+      description: 'Eid al-Adha Day 2 holiday',
     },
     {
       date: vars.hariWesak,
-      name: 'Hari Wesak',
+      name: 'Wesak Day',
       type: 'cultural',
       isPublicHoliday: true,
-      description: 'Cuti Umum Hari Wesak (Wesak Day)',
-      icon: '🪷',
+      description: 'Wesak Day public holiday',
     },
     {
       date: agongBirthday,
-      name: 'Hari Keputeraan Yang di-Pertuan Agong',
+      name: "Yang di-Pertuan Agong's Birthday",
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Cuti Umum Hari Keputeraan Rasmi Seri Paduka Baginda Yang di-Pertuan Agong',
-      icon: '👑',
-    },
-    {
-      date: `${year}-06-05`,
-      name: 'Hari Alam Sekitar Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'World Environment Day',
-      icon: '🌱',
-    },
-    {
-      date: `${year}-06-14`,
-      name: 'Hari Penderma Darah Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'World Blood Donor Day',
-      icon: '🩸',
+      description: 'Official federal birthday of the King of Malaysia',
     },
     {
       date: vars.awalMuharram,
-      name: 'Awal Muharram (Maal Hijrah)',
+      name: 'Awal Muharram (Islamic New Year)',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Tahun Baru Islam (1 Muharram)',
-      icon: '🕌',
+      description: 'First day of Muharram public holiday',
     },
     {
-      date: hariBapa,
-      name: 'Hari Bapa',
+      date: fathersDay,
+      name: "Father's Day",
       type: 'cultural',
       isPublicHoliday: false,
-      description: 'Sambutan Hari Bapa (Ahad ketiga bulan Jun)',
-      icon: '👔',
-    },
-    {
-      date: vars.hariAsyura,
-      name: 'Hari Asyura',
-      type: 'islamic',
-      isPublicHoliday: false,
-      description: 'Hari Asyura (10 Muharram)',
-      icon: '🍲',
-    },
-    {
-      date: `${year}-08-12`,
-      name: 'Hari Belia Antarabangsa',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'International Youth Day',
-      icon: '🌟',
+      description: 'Third Sunday of June',
     },
     {
       date: vars.maulidurRasul,
       name: 'Maulidur Rasul',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Sambutan Kelahiran Nabi Muhammad SAW (12 Rabiulawal)',
-      icon: '🕌',
+      description: "Prophet Muhammad's Birthday public holiday",
     },
     {
       date: `${year}-08-31`,
-      name: 'Hari Kebangsaan (Merdeka)',
+      name: 'Merdeka Day (National Day)',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Hari Kemerdekaan Malaysia ke-69',
-      icon: '🇲🇾',
+      description: 'Malaysia Independence Day public holiday',
     },
     {
       date: `${year}-09-16`,
-      name: 'Hari Malaysia',
+      name: 'Malaysia Day',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Pembentukan Persekutuan Malaysia 1963',
-      icon: '🇲🇾',
+      description: 'Malaysia Federation Day public holiday',
     },
     {
-      date: `${year}-10-05`,
-      name: 'Hari Guru Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'World Teachers\' Day',
-      icon: '🎓',
-    },
-    {
-      date: hariSukanNegara,
-      name: 'Hari Sukan Negara & Hari Kesihatan Mental Sedunia',
+      date: nationalSportsDay,
+      name: 'National Sports Day',
       type: 'national',
       isPublicHoliday: false,
-      description: 'Sambutan Hari Sukan Negara (Sabtu kedua Oktober)',
-      icon: '🏃',
+      description: 'Second Saturday of October',
     },
     {
       date: vars.deepavali,
-      name: 'Hari Deepavali',
+      name: 'Deepavali',
       type: 'cultural',
       isPublicHoliday: true,
-      description: 'Cuti Umum Perayaan Pesta Cahaya Deepavali',
-      icon: '🪔',
-    },
-    {
-      date: `${year}-11-20`,
-      name: 'Hari Kanak-kanak Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'Universal Children\'s Day',
-      icon: '🎈',
-    },
-    {
-      date: `${year}-12-01`,
-      name: 'Hari AIDS Sedunia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'World AIDS Day',
-      icon: '🎗️',
-    },
-    {
-      date: `${year}-12-03`,
-      name: 'Hari Orang Kurang Upaya',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'International Day of Persons with Disabilities',
-      icon: '♿',
-    },
-    {
-      date: `${year}-12-10`,
-      name: 'Hari Hak Asasi Manusia',
-      type: 'international',
-      isPublicHoliday: false,
-      description: 'Human Rights Day',
-      icon: '⚖️',
+      description: 'Festival of Lights public holiday',
     },
     {
       date: `${year}-12-25`,
-      name: 'Hari Krismas',
+      name: 'Christmas Day',
       type: 'public_holiday',
       isPublicHoliday: true,
-      description: 'Cuti Umum Hari Krismas (Christmas Day)',
-      icon: '🎄',
+      description: 'Christmas Day public holiday',
     },
   ];
 
-  // Also handle Cuti Ganti (Replacement holidays):
-  // In Malaysia, if a public holiday falls on a Sunday, the following Monday is a replacement holiday (Cuti Ganti)
-  const additionalCutiGanti: typeof rawEvents = [];
+  // Replacement holiday when a public holiday falls on Sunday
+  const replacementHolidays: typeof rawEvents = [];
   for (const ev of rawEvents) {
     if (ev.isPublicHoliday) {
       const d = new Date(`${ev.date}T12:00:00`);
       if (d.getDay() === 0) {
-        // Sunday
         const monday = new Date(d);
         monday.setDate(monday.getDate() + 1);
         const mondayStr = monday.toISOString().slice(0, 10);
-        additionalCutiGanti.push({
+        replacementHolidays.push({
           date: mondayStr,
-          name: `Cuti Ganti ${ev.name}`,
+          name: `${ev.name} (Replacement Holiday)`,
           type: 'public_holiday',
           isPublicHoliday: true,
-          description: `Cuti Ganti bagi perayaan yang jatuh pada hari Ahad (${ev.name})`,
-          icon: '🔄',
+          description: `Monday replacement holiday for ${ev.name}`,
         });
       }
     }
   }
 
-  // Combine and sort chronologically
-  const allHolidays = [...rawEvents, ...additionalCutiGanti].sort((a, b) =>
+  const allHolidays = [...rawEvents, ...replacementHolidays].sort((a, b) =>
     a.date.localeCompare(b.date)
   );
 
@@ -605,45 +384,11 @@ export function getMalaysianHolidays(year: number): MalaysiaHoliday[] {
     return {
       id: `my_holiday_${year}_${index}_${item.date}`,
       date: item.date,
-      dayName: getBMDayName(d),
+      dayName: getDayName(d),
       name: item.name,
       type: item.type,
       isPublicHoliday: item.isPublicHoliday,
       description: item.description,
-      icon: item.icon,
     };
   });
-}
-
-/**
- * Malaysian Examination Tracker (SPM, STPM, etc.)
- */
-export interface ExamMilestone {
-  id: string;
-  name: string;
-  code: string;
-  date: string;
-  type: 'exam_period' | 'results';
-  status: 'confirmed' | 'tbc';
-}
-
-export function getDefaultExamMilestones(year: number): ExamMilestone[] {
-  return [
-    {
-      id: `exam_spm_${year}`,
-      name: `Peperiksaan SPM (Sijil Pelajaran Malaysia) ${year}`,
-      code: 'SPM',
-      date: `${year}-11-16`,
-      type: 'exam_period',
-      status: 'confirmed',
-    },
-    {
-      id: `exam_spm_results_${year}`,
-      name: `Pengumuman Keputusan Peperiksaan SPM ${year}`,
-      code: 'SPM Keputusan',
-      date: `${year + 1}-05-28`,
-      type: 'results',
-      status: 'tbc',
-    },
-  ];
 }

@@ -82,8 +82,11 @@ function isCelebrationServerTask(task: any): boolean {
     task &&
       (task.isImportantDate ||
         task.eventDate ||
+        task.project === 'Holidays' ||
         task.project === 'Perayaan & Cuti' ||
-        (typeof task.title === 'string' && task.title.startsWith('Persediaan Sambutan:')))
+        (typeof task.title === 'string' &&
+          (task.title.startsWith('Holiday Prep:') ||
+            task.title.startsWith('Persediaan Sambutan:'))))
   );
 }
 
