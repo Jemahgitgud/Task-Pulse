@@ -13,7 +13,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Task, TaskPriority, TaskCategory, Subtask } from '../types';
-import { formatDateKey } from '../utils/date';
+import { formatDateKey, calculatePrepDeadline, addDays } from '../utils/date';
 import { decomposeTaskAI } from '../services/geminiService';
 
 interface QuickAddModalProps {
@@ -21,6 +21,7 @@ interface QuickAddModalProps {
   onClose: () => void;
   onSave: (task: Omit<Task, 'id' | 'createdAt'> & { id?: string }) => void;
   initialTask?: Task | null;
+  prefilledDate?: string;
 }
 
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({
@@ -28,19 +29,22 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
   onClose,
   onSave,
   initialTask,
+  prefilledDate,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [project, setProject] = useState('General');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [category, setCategory] = useState<TaskCategory>('Work');
-  const [dueDate, setDueDate] = useState(formatDateKey());
+  const [dueDate, setDueDate] = useState(prefilledDate || formatDateKey());
   const [dueTime, setDueTime] = useState('');
   const [pinned, setPinned] = useState(false);
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isDecomposing, setIsDecomposing] = useState(false);
+  const [isImportantDate, setIsImportantDate] = useState(false);
+  const [eventDate, setEventDate] = useState(prefilledDate ? addDays(prefilledDate, 7) : formatDateKey());
 
   useEffect(() => {
     if (initialTask) {
@@ -54,19 +58,23 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
       setPinned(initialTask.pinned);
       setReminderEnabled(initialTask.reminderEnabled);
       setSubtasks(initialTask.subtasks || []);
+      setIsImportantDate(initialTask.isImportantDate || false);
+      setEventDate(initialTask.eventDate || (initialTask.dueDate ? addDays(initialTask.dueDate, 7) : formatDateKey()));
     } else {
       setTitle('');
       setDescription('');
       setProject('General');
       setPriority('medium');
       setCategory('Work');
-      setDueDate(formatDateKey());
+      setDueDate(prefilledDate || formatDateKey());
       setDueTime('');
       setPinned(false);
       setReminderEnabled(true);
       setSubtasks([]);
+      setIsImportantDate(false);
+      setEventDate(prefilledDate ? addDays(prefilledDate, 7) : formatDateKey());
     }
-  }, [initialTask, isOpen]);
+  }, [initialTask, isOpen, prefilledDate]);
 
   if (!isOpen) return null;
 
@@ -102,19 +110,25 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
+    const finalDueDate = isImportantDate ? calculatePrepDeadline(eventDate, 7) : dueDate;
+
     onSave({
       id: initialTask?.id,
       title: title.trim(),
       description: description.trim() || undefined,
-      project: project.trim() || 'General',
-      priority,
+      project: project.trim() || (isImportantDate ? 'Perayaan & Cuti' : 'General'),
+      priority: isImportantDate ? 'urgent' : priority,
       category,
-      dueDate,
+      dueDate: finalDueDate,
       dueTime: dueTime || undefined,
       status: initialTask?.status || 'todo',
       subtasks,
       pinned,
-      reminderEnabled,
+      reminderEnabled: isImportantDate ? true : reminderEnabled,
+      isImportantDate,
+      eventDate: isImportantDate ? eventDate : undefined,
+      eventName: isImportantDate ? title.trim() : undefined,
+      leadDaysNotice: 7,
     });
     onClose();
   };
@@ -201,6 +215,79 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
                 <option value="Personal">Personal</option>
               </select>
             </div>
+          </div>
+
+          {/* Important Date / Celebration Toggle */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 dark:border-amber-800/60 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🇲🇾</span>
+                <div>
+                  <h5 className="font-bold text-slate-900 dark:text-white text-xs">
+                    Tarikh Penting / Perayaan (Auto Dateline 7 Hari Sebelum)
+                  </h5>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Sistem akan menetapkan dateline tugasan dan amaran notifikasi tepat 7 hari sebelum acara.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={isImportantDate}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsImportantDate(checked);
+                    if (checked) {
+                      setPriority('urgent');
+                      setReminderEnabled(true);
+                      setDueDate(calculatePrepDeadline(eventDate, 7));
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            {isImportantDate && (
+              <div className="pt-2 border-t border-amber-200 dark:border-amber-900/40 space-y-2 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                      Tarikh Acara / Sambutan Sebenar (Event Date)
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={eventDate}
+                      onChange={(e) => {
+                        setEventDate(e.target.value);
+                        setDueDate(calculatePrepDeadline(e.target.value, 7));
+                      }}
+                      className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                      Dateline Persediaan (Auto 7 Hari Sebelum)
+                    </label>
+                    <div className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 text-xs font-mono font-bold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                      <span>{calculatePrepDeadline(eventDate, 7)}</span>
+                      <span className="text-[10px] bg-amber-200 dark:bg-amber-900 px-1.5 py-0.2 rounded font-bold">
+                        T-7 Dateline
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                  <Bell className="w-3.5 h-3.5 shrink-0" />
+                  <span>Notifikasi amaran akan dihantar tepat 7 hari sebelum ({calculatePrepDeadline(eventDate, 7)}).</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Priority & Deadline Date/Time */}

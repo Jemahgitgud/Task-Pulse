@@ -22,7 +22,26 @@ export interface Task {
   pinned: boolean;
   reminderEnabled: boolean;
   createdAt: string;
+  updatedAt?: string;
   completedAt?: string;
+  isImportantDate?: boolean;
+  eventDate?: string; // Target celebration / milestone date (YYYY-MM-DD)
+  eventName?: string; // Name of holiday or event
+  leadDaysNotice?: number; // Advance prep notice days (defaults to 7)
+}
+
+export type P2PConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+
+export interface P2PSyncStats {
+  state: P2PConnectionState;
+  roomId: string;
+  peerId: string;
+  remotePeerId?: string;
+  connectedPeersCount: number;
+  pingMs?: number;
+  messagesSent?: number;
+  messagesReceived?: number;
+  channelReadyState?: string;
 }
 
 export interface UserSettings {

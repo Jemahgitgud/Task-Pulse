@@ -12,8 +12,10 @@ import { DailyDigestAlertsView } from './components/DailyDigestAlertsView';
 import { QuickAddModal } from './components/QuickAddModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AIBriefingModal } from './components/AIBriefingModal';
+import { P2PSyncModal } from './components/P2PSyncModal';
 import { CheckCircle2, X } from 'lucide-react';
-import { formatDateKey } from './utils/date';
+import { formatDateKey, calculatePrepDeadline } from './utils/date';
+import { MalaysiaHoliday, getMalaysianHolidays } from './utils/malaysiaHolidays';
 
 const SETTINGS_KEY = 'taskpulse_settings_v2';
 const APP_TITLE_KEY = 'taskpulse_app_title_v2';
@@ -58,14 +60,20 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAIBriefingOpen, setIsAIBriefingOpen] = useState(false);
+  const [isP2PModalOpen, setIsP2PModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [prefilledDate, setPrefilledDate] = useState<string | undefined>(undefined);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Core tasks engine
   const {
     tasks,
     syncStatus,
+    connectedDevices,
     lastAddedTaskId,
+    p2pStats,
+    changeP2PRoom,
+    syncP2PNow,
     addTask,
     updateTask,
     toggleTaskStatus,
@@ -157,6 +165,66 @@ export default function App() {
     showToast(`Added "${created.title}"`);
   };
 
+  const handleAutoLogHolidayTask = (holiday: MalaysiaHoliday) => {
+    const prepDueDate = calculatePrepDeadline(holiday.date, 7);
+    const created = addTask({
+      title: `Persediaan Sambutan: ${holiday.name}`,
+      description: holiday.description || `Persiapan awal dan semakan urusan 7 hari sebelum ${holiday.name}.`,
+      project: 'Perayaan & Cuti',
+      priority: 'urgent',
+      category: 'Deadline',
+      dueDate: prepDueDate,
+      dueTime: '09:00',
+      status: 'todo',
+      pinned: true,
+      reminderEnabled: true,
+      isImportantDate: true,
+      eventDate: holiday.date,
+      eventName: holiday.name,
+      leadDaysNotice: 7,
+      subtasks: [
+        { id: `st_${Date.now()}_1`, title: `Sediakan perancangan bajet & logistik sambutan`, completed: false },
+        { id: `st_${Date.now()}_2`, title: `Pengesahan cuti / urusan tugasan penting`, completed: false },
+        { id: `st_${Date.now()}_3`, title: `Selesaikan tempahan perjalanan / bekalan perayaan`, completed: false },
+      ],
+    });
+    showToast(`Auto-log: "${created.title}" (Dateline: ${prepDueDate} - 7 hari sebelum)`);
+  };
+
+  const handleAutoLogAllMajorHolidays = (year: number) => {
+    const holidays = getMalaysianHolidays(year);
+    const majorHolidays = holidays.filter((h) => h.isPublicHoliday);
+    let count = 0;
+    for (const h of majorHolidays) {
+      const prepDueDate = calculatePrepDeadline(h.date, 7);
+      const exists = tasks.some((t) => t.eventDate === h.date);
+      if (!exists) {
+        addTask({
+          title: `Persediaan Sambutan: ${h.name}`,
+          description: h.description || `Persiapan rasmi 7 hari sebelum ${h.name}.`,
+          project: 'Perayaan & Cuti',
+          priority: 'urgent',
+          category: 'Deadline',
+          dueDate: prepDueDate,
+          dueTime: '09:00',
+          status: 'todo',
+          pinned: false,
+          reminderEnabled: true,
+          isImportantDate: true,
+          eventDate: h.date,
+          eventName: h.name,
+          leadDaysNotice: 7,
+          subtasks: [
+            { id: `st_${Date.now()}_${count}_1`, title: `Sediakan perancangan sambutan & semakan jadual`, completed: false },
+            { id: `st_${Date.now()}_${count}_2`, title: `Selesaikan tugasan kerja sebelum tarikh cuti`, completed: false },
+          ],
+        });
+        count++;
+      }
+    }
+    showToast(`Berjaya menambah ${count} perayaan utama (${year}) dengan dateline 7 hari sebelum!`);
+  };
+
   const today = formatDateKey();
   const activeTasks = tasks.filter((t) => t.status !== 'completed');
   const urgentCount = activeTasks.filter(
@@ -175,22 +243,25 @@ export default function App() {
         phoneMode={phoneMode}
         onTogglePhoneMode={() => setPhoneMode(!phoneMode)}
         syncStatus={syncStatus}
+        connectedDevices={connectedDevices}
         urgentCount={urgentCount}
+        p2pStats={p2pStats}
         onOpenQuickAdd={() => {
           setEditingTask(null);
           setIsQuickAddOpen(true);
         }}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAIBriefing={() => setIsAIBriefingOpen(true)}
+        onOpenP2PSync={() => setIsP2PModalOpen(true)}
       />
 
       {/* Main Container */}
-      <main className="flex-1 safe-bottom-clearance pt-3 sm:pt-6 px-3 sm:px-6">
+      <main className="flex-1 safe-bottom-clearance pt-3 sm:pt-6 px-2.5 sm:px-6 w-full max-w-full overflow-x-hidden">
         <div
-          className={`mx-auto transition-all duration-200 ${
+          className={`mx-auto transition-all duration-200 w-full ${
             phoneMode
-              ? 'max-w-[420px] bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-[44px] p-4 shadow-2xl my-3'
-              : 'max-w-3xl'
+              ? 'max-w-[420px] bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-[44px] p-3 sm:p-4 shadow-2xl my-3'
+              : 'max-w-4xl lg:max-w-5xl'
           }`}
         >
           {/* Active Alert Banner */}
@@ -271,10 +342,13 @@ export default function App() {
                 setEditingTask(task);
                 setIsQuickAddOpen(true);
               }}
-              onOpenQuickAdd={() => {
+              onOpenQuickAdd={(date) => {
                 setEditingTask(null);
+                setPrefilledDate(date);
                 setIsQuickAddOpen(true);
               }}
+              onAutoLogHoliday={handleAutoLogHolidayTask}
+              onAutoLogAllMajorHolidays={handleAutoLogAllMajorHolidays}
             />
           )}
 
@@ -287,6 +361,7 @@ export default function App() {
               onImportTasks={importTasks}
               onOpenQuickAdd={() => {
                 setEditingTask(null);
+                setPrefilledDate(undefined);
                 setIsQuickAddOpen(true);
               }}
             />
@@ -296,7 +371,7 @@ export default function App() {
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm animate-slide-up">
+        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm animate-toast">
           <div className="bg-slate-900 dark:bg-slate-800 text-white border border-slate-700/80 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3 backdrop-blur-md">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
@@ -321,9 +396,11 @@ export default function App() {
         onClose={() => {
           setIsQuickAddOpen(false);
           setEditingTask(null);
+          setPrefilledDate(undefined);
         }}
         onSave={handleSaveTask}
         initialTask={editingTask}
+        prefilledDate={prefilledDate}
       />
 
       <SettingsModal
@@ -341,6 +418,14 @@ export default function App() {
         isOpen={isAIBriefingOpen}
         onClose={() => setIsAIBriefingOpen(false)}
         tasks={tasks}
+      />
+
+      <P2PSyncModal
+        isOpen={isP2PModalOpen}
+        onClose={() => setIsP2PModalOpen(false)}
+        stats={p2pStats}
+        onChangeRoom={changeP2PRoom}
+        onSyncNow={syncP2PNow}
       />
     </div>
   );

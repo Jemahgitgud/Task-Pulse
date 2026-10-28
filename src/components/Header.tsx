@@ -12,7 +12,10 @@ import {
   CloudUpload,
   Settings,
   Sparkles,
+  Radio,
+  Wifi,
 } from 'lucide-react';
+import { P2PSyncStats } from '../types';
 
 interface HeaderProps {
   appTitle: string;
@@ -22,11 +25,14 @@ interface HeaderProps {
   onToggleSound: () => void;
   phoneMode: boolean;
   onTogglePhoneMode: () => void;
-  syncStatus: 'synced' | 'syncing' | 'local';
+  syncStatus: 'synced' | 'syncing' | 'offline';
+  connectedDevices: number;
   urgentCount: number;
+  p2pStats?: P2PSyncStats;
   onOpenQuickAdd: () => void;
   onOpenSettings: () => void;
   onOpenAIBriefing: () => void;
+  onOpenP2PSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -38,10 +44,13 @@ export const Header: React.FC<HeaderProps> = ({
   phoneMode,
   onTogglePhoneMode,
   syncStatus,
+  connectedDevices,
   urgentCount,
+  p2pStats,
   onOpenQuickAdd,
   onOpenSettings,
   onOpenAIBriefing,
+  onOpenP2PSync,
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-150">
@@ -57,8 +66,8 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white truncate">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="text-sm sm:text-lg font-bold tracking-tight text-slate-900 dark:text-white truncate max-w-[110px] min-[380px]:max-w-[160px] sm:max-w-none">
                 {appTitle}
               </h1>
               {urgentCount > 0 && (
@@ -72,25 +81,56 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-              {/* Sync Status Badge */}
-              <span className="inline-flex items-center gap-1">
-                {syncStatus === 'synced' ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Cloud Ready</span>
-                  </>
-                ) : syncStatus === 'syncing' ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                    <span>Offline Stored</span>
-                  </>
-                )}
-              </span>
+              {/* Multi-Device WebRTC P2P Direct Status */}
+              {onOpenP2PSync && p2pStats ? (
+                <button
+                  type="button"
+                  onClick={onOpenP2PSync}
+                  className="inline-flex items-center gap-1 font-medium hover:underline text-left cursor-pointer group"
+                  title="Direct browser-to-browser P2P WebRTC data sync without cloud database"
+                >
+                  {p2pStats.state === 'connected' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                        P2P ({p2pStats.connectedPeersCount} {p2pStats.connectedPeersCount === 1 ? 'Peer' : 'Peers'}
+                        {p2pStats.pingMs !== undefined ? ` • ${p2pStats.pingMs}ms` : ''})
+                      </span>
+                    </>
+                  ) : p2pStats.state === 'connecting' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      <span className="text-amber-600 dark:text-amber-400">P2P Pairing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      <span className="text-slate-500">P2P Sync</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1 font-medium">
+                  {syncStatus === 'synced' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-emerald-700 dark:text-emerald-400">
+                        {connectedDevices > 1 ? `Synced (${connectedDevices} devices)` : 'Synced'}
+                      </span>
+                    </>
+                  ) : syncStatus === 'syncing' ? (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      <span>Syncing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      <span>Offline (Local)</span>
+                    </>
+                  )}
+                </span>
+              )}
 
               <span>•</span>
 
@@ -108,6 +148,25 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* P2P Direct Pair Action Button */}
+          {onOpenP2PSync && (
+            <button
+              type="button"
+              onClick={onOpenP2PSync}
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition active:scale-95 ${
+                p2pStats?.state === 'connected'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/60'
+              }`}
+              title="Pair Phone & Laptop via WebRTC (No Firebase)"
+            >
+              <Radio className={`w-3.5 h-3.5 ${p2pStats?.state === 'connected' ? 'text-emerald-500' : 'text-indigo-500'}`} />
+              <span className="hidden min-[420px]:inline">
+                {p2pStats?.state === 'connected' ? 'P2P Linked' : 'P2P Sync'}
+              </span>
+            </button>
+          )}
+
           {/* Phone Frame Toggle (Desktop only) */}
           <button
             type="button"

@@ -16,6 +16,7 @@ import {
 import { Task, TaskPriority, TaskCategory } from '../types';
 import { formatDateKey, formatDisplayDate } from '../utils/date';
 import { TaskCard } from './TaskCard';
+import { getMalaysianHolidays, MalaysiaHoliday } from '../utils/malaysiaHolidays';
 
 interface TodayRadarViewProps {
   tasks: Task[];
@@ -86,6 +87,10 @@ export const TodayRadarView: React.FC<TodayRadarViewProps> = ({
   const pinnedOrUrgentToday = dueTodayTasks.filter(
     (t) => t.pinned || t.priority === 'urgent'
   );
+
+  // Malaysian celebration on selected date
+  const selectedYear = parseInt(selectedDate.split('-')[0], 10) || new Date().getFullYear();
+  const activeHolidays = getMalaysianHolidays(selectedYear).filter((h) => h.date === selectedDate);
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +175,30 @@ export const TodayRadarView: React.FC<TodayRadarViewProps> = ({
           <span>Daily Pulse Active</span>
         </div>
       </div>
+
+      {/* Malaysian Celebration Banner if active */}
+      {activeHolidays.length > 0 && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-indigo-500/10 to-transparent border border-amber-300/80 dark:border-amber-800/60 flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{activeHolidays[0].icon || '🇲🇾'}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                  Acara Hari Ini: {activeHolidays[0].name}
+                </span>
+                {activeHolidays[0].isPublicHoliday && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white">
+                    Cuti Umum
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                {activeHolidays[0].description}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Daily Progress Digest Card */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 text-white p-5 sm:p-6 shadow-xl border border-indigo-800/40">

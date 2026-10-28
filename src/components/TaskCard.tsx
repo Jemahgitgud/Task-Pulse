@@ -149,6 +149,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
             {/* Tags, Project, Deadline, and Badges */}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+              {/* Important Date / Celebration Badge */}
+              {(task.isImportantDate || task.eventDate) && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-semibold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60 shadow-xs">
+                  <span className="text-xs">🇲🇾</span>
+                  <span>{task.eventName || 'Tarikh Penting'}</span>
+                  {task.eventDate && (
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">
+                      (Acara: {task.eventDate})
+                    </span>
+                  )}
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-1 py-0.2 rounded bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                    T-7 Dateline
+                  </span>
+                </span>
+              )}
+
               {/* Project Badge */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium border border-slate-200 dark:border-slate-700/60">
                 <Tag className="w-3 h-3 text-slate-400" />

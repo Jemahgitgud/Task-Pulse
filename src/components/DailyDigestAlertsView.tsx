@@ -21,6 +21,7 @@ import { Task, UserSettings, TaskPriority, TaskCategory } from '../types';
 import { formatDateKey } from '../utils/date';
 import { triggerNotification, requestNotificationPermission } from '../hooks/useAlerts';
 import { playAlertPing, playCompletionChime, triggerHaptic } from '../utils/audio';
+import { registerServiceWorkerAndPush, triggerServerPushTest } from '../utils/pushNotifications';
 
 interface DailyDigestAlertsViewProps {
   tasks: Task[];
@@ -70,23 +71,25 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
     totalPool > 0 ? Math.round((completedToday.length / totalPool) * 100) : 100;
 
   const handleRequestPermission = async () => {
-    const permission = await requestNotificationPermission();
+    const regResult = await registerServiceWorkerAndPush();
+    const permission = regResult.permission;
     onUpdateSettings({ permission, enabled: permission === 'granted' });
     if (permission === 'granted') {
-      triggerNotification("Jemah's TaskPulse: Notifications Enabled! 🚀", {
-        body: `Daily progress digest is active. Today: ${dueTodayTasks.length} task(s) scheduled.`,
+      triggerNotification("Jemah's TaskPulse: Notifikasi Aktif! 🚀", {
+        body: `Notifikasi latar belakang & penyegerakan aktif. ${dueTodayTasks.length} tugasan hari ini.`,
       });
       playCompletionChime(settings.soundEnabled);
       triggerHaptic(40, settings.vibrationEnabled);
     }
   };
 
-  const handleTestAlert = () => {
+  const handleTestAlert = async () => {
     triggerNotification("TaskPulse Alert: Deadline Approaching ⏰", {
       body: "High priority deliverable review scheduled for today. Keep up the great velocity!",
     });
     playAlertPing(settings.soundEnabled);
     triggerHaptic(50, settings.vibrationEnabled);
+    await triggerServerPushTest();
     setTestNotificationSent(true);
     setTimeout(() => setTestNotificationSent(false), 4000);
   };

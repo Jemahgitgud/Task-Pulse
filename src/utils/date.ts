@@ -134,3 +134,42 @@ export function formatTime12h(time24?: string): string {
   const hour12 = h % 12 || 12;
   return `${hour12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
+
+/**
+ * Subtracts N days from a YYYY-MM-DD date string
+ */
+export function subtractDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() - days);
+  return formatDateKey(date);
+}
+
+/**
+ * Adds N days to a YYYY-MM-DD date string
+ */
+export function addDays(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return formatDateKey(date);
+}
+
+/**
+ * Calculates preparation deadline (defaults to 7 days before target event date)
+ */
+export function calculatePrepDeadline(eventDateStr: string, leadDays: number = 7): string {
+  return subtractDays(eventDateStr, leadDays);
+}
+
+/**
+ * Returns difference in days between two YYYY-MM-DD date strings
+ */
+export function getDaysDifference(fromKey: string, toKey: string): number {
+  const [y1, m1, d1] = fromKey.split('-').map(Number);
+  const [y2, m2, d2] = toKey.split('-').map(Number);
+  const date1 = new Date(y1, m1 - 1, d1);
+  const date2 = new Date(y2, m2 - 1, d2);
+  return Math.round((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+}
+

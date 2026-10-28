@@ -42,7 +42,40 @@ export function useAlerts(tasks: Task[], settings: UserSettings) {
         const dueTimestamp = new Date(`${task.dueDate}T${task.dueTime || '23:59:00'}`).getTime();
         const diffMinutes = Math.round((dueTimestamp - nowTime) / (1000 * 60));
 
-        // 1. Critical: Due in <= 30 minutes
+        // 1. Important Date / Celebration 7-Day Alert (T-7 Advance Notice)
+        if (task.isImportantDate || task.eventDate) {
+          const targetEventDate = task.eventDate || task.dueDate;
+          const [ey, em, ed] = targetEventDate.split('-').map(Number);
+          const [ty, tm, td] = todayStr.split('-').map(Number);
+          const eventTime = new Date(ey, em - 1, ed).getTime();
+          const todayTime = new Date(ty, tm - 1, td).getTime();
+          const daysToEvent = Math.round((eventTime - todayTime) / (1000 * 60 * 60 * 24));
+
+          // Trigger on exactly 7 days before (or on the task's calculated T-7 prep due date)
+          if ((daysToEvent === 7 || task.dueDate === todayStr) && daysToEvent >= 0) {
+            const alertKey = `7d_important_${task.id}_${targetEventDate}`;
+            if (!dismissed[alertKey]) {
+              recordDismissedAlert(alertKey);
+              const eventLabel = task.eventName || task.title;
+              triggerNotification(`🚨 Peringatan 7 Hari: ${eventLabel}`, {
+                body: `Tepat 7 hari menjelang acara (${targetEventDate})! Tarikh akhir persediaan dijadualkan hari ini.`,
+              });
+              playAlertPing(settings.soundEnabled);
+              triggerHaptic(50, settings.vibrationEnabled);
+              setActiveAlert({
+                id: alertKey,
+                taskId: task.id,
+                title: `🚨 Peringatan 7 Hari: ${eventLabel}`,
+                message: `Tepat 7 hari sebelum ${targetEventDate}! Tarikh akhir persediaan (dateline) adalah hari ini.`,
+                urgency: 'warning',
+                timestamp: Date.now(),
+              });
+              break;
+            }
+          }
+        }
+
+        // 2. Critical: Due in <= 30 minutes
         if (diffMinutes > 0 && diffMinutes <= 30) {
           const alertKey = `30m_${task.id}_${task.dueDate}`;
           if (!dismissed[alertKey]) {
@@ -64,7 +97,7 @@ export function useAlerts(tasks: Task[], settings: UserSettings) {
           }
         }
 
-        // 2. Warning: Due in 30 - 120 minutes
+        // 3. Warning: Due in 30 - 120 minutes
         if (diffMinutes > 30 && diffMinutes <= 120) {
           const alertKey = `2h_${task.id}_${task.dueDate}`;
           if (!dismissed[alertKey]) {
@@ -87,7 +120,7 @@ export function useAlerts(tasks: Task[], settings: UserSettings) {
           }
         }
 
-        // 3. Overdue task
+        // 4. Overdue task
         if (task.dueDate < todayStr) {
           const alertKey = `overdue_${task.id}_${todayStr}`;
           if (!dismissed[alertKey]) {

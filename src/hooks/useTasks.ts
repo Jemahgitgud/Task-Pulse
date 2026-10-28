@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Task, TaskPriority, TaskCategory, TaskStatus } from '../types';
+import { Task, TaskPriority, TaskCategory, TaskStatus, P2PSyncStats } from '../types';
 import { formatDateKey } from '../utils/date';
 import { playCompletionChime, playClickTone, triggerHaptic, fireConfetti } from '../utils/audio';
+import { p2pService } from '../services/webrtcService';
 
 const STORAGE_KEY = 'taskpulse_tasks_v2';
 
@@ -136,35 +137,155 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {}
-    const sample = getSampleTasks();
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sample));
-    } catch {}
-    return sample;
+    return getSampleTasks();
   });
 
-  const [syncStatus, setSyncStatus] = useState<'local' | 'synced' | 'syncing'>('synced');
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline'>('synced');
+  const [connectedDevices, setConnectedDevices] = useState<number>(1);
   const [lastAddedTaskId, setLastAddedTaskId] = useState<string | null>(null);
-  const saveTimeout = useRef<number | null>(null);
+  const isInitialFetch = useRef(true);
+
+  // Maintain tasksRef so WebRTC callbacks always get the newest tasks
+  const tasksRef = useRef<Task[]>(tasks);
+  tasksRef.current = tasks;
+
+  // WebRTC Peer-to-Peer direct browser sync state
+  const [p2pStats, setP2pStats] = useState<P2PSyncStats>(() => ({
+    state: 'connecting',
+    roomId: p2pService.getRoomId(),
+    peerId: p2pService.getPeerId(),
+    connectedPeersCount: 0,
+    messagesSent: 0,
+    messagesReceived: 0,
+  }));
+
+  // 1. Initial Fetch & Server Synchronization + WebRTC P2P Data Channel setup
+  useEffect(() => {
+    let active = true;
+
+    // Register WebRTC callbacks
+    p2pService.registerCallbacks(
+      (incomingTasks, action) => {
+        if (!active) return;
+        setTasks(incomingTasks);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(incomingTasks));
+        } catch {}
+        setSyncStatus('synced');
+      },
+      (newStats) => {
+        if (!active) return;
+        setP2pStats(newStats);
+        if (newStats.connectedPeersCount > 0) {
+          setConnectedDevices((prev) => Math.max(prev, newStats.connectedPeersCount + 1));
+        }
+      },
+      () => tasksRef.current
+    );
+
+    // Connect to WebRTC signaling server
+    p2pService.connect();
+
+    async function syncWithServer() {
+      try {
+        setSyncStatus('syncing');
+        const res = await fetch('/api/tasks');
+        if (!res.ok) throw new Error('Server unreachable');
+        const data = await res.json();
+
+        if (!active) return;
+
+        if (Array.isArray(data.tasks) && data.tasks.length > 0) {
+          setTasks(data.tasks);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data.tasks));
+          } catch {}
+        } else {
+          // If server database is empty, seed it with initial tasks
+          const initial = tasks.length > 0 ? tasks : getSampleTasks();
+          await fetch('/api/tasks/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks: initial }),
+          });
+        }
+        setSyncStatus('synced');
+      } catch (err) {
+        console.warn('Backend sync fallback to local storage:', err);
+        setSyncStatus('offline');
+      }
+    }
+
+    if (isInitialFetch.current) {
+      isInitialFetch.current = false;
+      syncWithServer();
+    }
+
+    // 2. Connect to Server-Sent Events (SSE) for 2-Device Instant Sync
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.addEventListener('task_change', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (Array.isArray(payload.tasks)) {
+            setTasks(payload.tasks);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.tasks));
+            } catch {}
+            setSyncStatus('synced');
+          }
+        } catch {}
+      });
+
+      eventSource.addEventListener('device_count', (e: MessageEvent) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (typeof payload.connectedDevices === 'number') {
+            setConnectedDevices(payload.connectedDevices);
+          }
+        } catch {}
+      });
+
+      eventSource.addEventListener('connected', (e: MessageEvent) => {
+        setSyncStatus('synced');
+        try {
+          const payload = JSON.parse(e.data);
+          if (typeof payload.connectedDevices === 'number') {
+            setConnectedDevices(payload.connectedDevices);
+          }
+        } catch {}
+      });
+
+      eventSource.onerror = () => {
+        setSyncStatus('offline');
+      };
+    } catch {}
+
+    // Periodic sync on window focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithServer();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      active = false;
+      if (eventSource) eventSource.close();
+      window.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
 
   // Sync to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-      setSyncStatus('syncing');
-      if (saveTimeout.current) clearTimeout(saveTimeout.current);
-      saveTimeout.current = window.setTimeout(() => {
-        setSyncStatus('synced');
-      }, 400);
-    } catch (e) {
-      console.warn('LocalStorage save error:', e);
-      setSyncStatus('local');
-    }
+    } catch {}
   }, [tasks]);
 
   const addTask = (
@@ -172,158 +293,275 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
   ): Task => {
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const id = partial.id || `task_${Date.now()}_${randomSuffix}`;
+    const nowIso = new Date().toISOString();
     const newTask: Task = {
       ...partial,
       id,
       dueDate: partial.dueDate || formatDateKey(),
-      createdAt: partial.createdAt || new Date().toISOString(),
+      createdAt: partial.createdAt || nowIso,
+      updatedAt: nowIso,
       status: partial.status || 'todo',
       subtasks: partial.subtasks || [],
       pinned: !!partial.pinned,
       reminderEnabled: partial.reminderEnabled !== undefined ? partial.reminderEnabled : true,
     };
 
-    setTasks((prev) => [newTask, ...prev]);
+    const nextTasks = [newTask, ...tasks];
+
+    // Optimistic local update
+    setTasks(nextTasks);
     setLastAddedTaskId(id);
     playClickTone(soundEnabled);
     triggerHaptic(30, vibrationEnabled);
+
+    // Direct WebRTC P2P broadcast
+    p2pService.broadcastMutation('add', newTask, nextTasks);
+
+    // Broadcast to server
+    fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newTask),
+    }).catch(() => setSyncStatus('offline'));
+
     return newTask;
   };
 
   const updateTask = (id: string, updates: Partial<Task>) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          const updated = { ...t, ...updates };
-          if (updates.status === 'completed' && t.status !== 'completed') {
-            updated.completedAt = new Date().toISOString();
-          } else if (updates.status && updates.status !== 'completed') {
-            updated.completedAt = undefined;
-          }
-          return updated;
+    let updatedTask: Task | null = null;
+    const nowIso = new Date().toISOString();
+    const nextTasks = tasks.map((t) => {
+      if (t.id === id) {
+        const updated = { ...t, ...updates, updatedAt: nowIso };
+        if (updates.status === 'completed' && t.status !== 'completed') {
+          updated.completedAt = nowIso;
+        } else if (updates.status && updates.status !== 'completed') {
+          updated.completedAt = undefined;
         }
-        return t;
-      })
-    );
+        updatedTask = updated;
+        return updated;
+      }
+      return t;
+    });
+
+    setTasks(nextTasks);
+
+    if (updatedTask) {
+      p2pService.broadcastMutation('update', updatedTask, nextTasks);
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      }).catch(() => setSyncStatus('offline'));
+    }
   };
 
   const toggleTaskStatus = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          const willComplete = t.status !== 'completed';
-          if (willComplete) {
-            playCompletionChime(soundEnabled);
-            triggerHaptic(45, vibrationEnabled);
-            fireConfetti();
-          } else {
-            playClickTone(soundEnabled);
-            triggerHaptic(20, vibrationEnabled);
-          }
-          return {
-            ...t,
-            status: willComplete ? 'completed' : 'todo',
-            completedAt: willComplete ? new Date().toISOString() : undefined,
-          };
+    let updated: Task | null = null;
+    const nowIso = new Date().toISOString();
+    const nextTasks = tasks.map((t) => {
+      if (t.id === id) {
+        const willComplete = t.status !== 'completed';
+        if (willComplete) {
+          playCompletionChime(soundEnabled);
+          triggerHaptic(45, vibrationEnabled);
+          fireConfetti();
+        } else {
+          playClickTone(soundEnabled);
+          triggerHaptic(20, vibrationEnabled);
         }
-        return t;
-      })
-    );
+        updated = {
+          ...t,
+          status: willComplete ? 'completed' : 'todo',
+          completedAt: willComplete ? nowIso : undefined,
+          updatedAt: nowIso,
+        };
+        return updated;
+      }
+      return t;
+    });
+
+    setTasks(nextTasks);
+
+    if (updated) {
+      p2pService.broadcastMutation('toggle', updated, nextTasks);
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => setSyncStatus('offline'));
+    }
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === taskId) {
-          const updatedSubtasks = t.subtasks.map((st) =>
-            st.id === subtaskId ? { ...st, completed: !st.completed } : st
-          );
-          const allCompleted =
-            updatedSubtasks.length > 0 && updatedSubtasks.every((st) => st.completed);
+    let updated: Task | null = null;
+    const nowIso = new Date().toISOString();
+    const nextTasks = tasks.map((t) => {
+      if (t.id === taskId) {
+        const updatedSubtasks = t.subtasks.map((st) =>
+          st.id === subtaskId ? { ...st, completed: !st.completed } : st
+        );
+        const allCompleted =
+          updatedSubtasks.length > 0 && updatedSubtasks.every((st) => st.completed);
 
-          if (allCompleted && t.status !== 'completed') {
-            playCompletionChime(soundEnabled);
-            triggerHaptic(45, vibrationEnabled);
-            fireConfetti();
-          } else {
-            playClickTone(soundEnabled);
-            triggerHaptic(20, vibrationEnabled);
-          }
-
-          return {
-            ...t,
-            subtasks: updatedSubtasks,
-            status: allCompleted ? 'completed' : t.status,
-            completedAt: allCompleted && !t.completedAt ? new Date().toISOString() : t.completedAt,
-          };
+        if (allCompleted && t.status !== 'completed') {
+          playCompletionChime(soundEnabled);
+          triggerHaptic(45, vibrationEnabled);
+          fireConfetti();
+        } else {
+          playClickTone(soundEnabled);
+          triggerHaptic(20, vibrationEnabled);
         }
-        return t;
-      })
-    );
+
+        updated = {
+          ...t,
+          subtasks: updatedSubtasks,
+          status: allCompleted ? 'completed' : t.status,
+          completedAt: allCompleted && !t.completedAt ? nowIso : t.completedAt,
+          updatedAt: nowIso,
+        };
+        return updated;
+      }
+      return t;
+    });
+
+    setTasks(nextTasks);
+
+    if (updated) {
+      p2pService.broadcastMutation('update', updated, nextTasks);
+      fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => setSyncStatus('offline'));
+    }
   };
 
   const togglePin = (id: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t))
-    );
+    let updated: Task | null = null;
+    const nowIso = new Date().toISOString();
+    const nextTasks = tasks.map((t) => {
+      if (t.id === id) {
+        updated = { ...t, pinned: !t.pinned, updatedAt: nowIso };
+        return updated;
+      }
+      return t;
+    });
+
+    setTasks(nextTasks);
     playClickTone(soundEnabled);
     triggerHaptic(20, vibrationEnabled);
+
+    if (updated) {
+      p2pService.broadcastMutation('update', updated, nextTasks);
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => setSyncStatus('offline'));
+    }
   };
 
   const rescheduleTask = (id: string, daysOffset: number, customDate?: string) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          let newDate = customDate;
-          if (!newDate) {
-            const current = new Date(`${t.dueDate}T12:00:00`);
-            current.setDate(current.getDate() + daysOffset);
-            newDate = formatDateKey(current);
-          }
-          return { ...t, dueDate: newDate };
+    let updated: Task | null = null;
+    const nowIso = new Date().toISOString();
+    const nextTasks = tasks.map((t) => {
+      if (t.id === id) {
+        let newDate = customDate;
+        if (!newDate) {
+          const current = new Date(`${t.dueDate}T12:00:00`);
+          current.setDate(current.getDate() + daysOffset);
+          newDate = formatDateKey(current);
         }
-        return t;
-      })
-    );
+        updated = { ...t, dueDate: newDate, updatedAt: nowIso };
+        return updated;
+      }
+      return t;
+    });
+
+    setTasks(nextTasks);
     playClickTone(soundEnabled);
     triggerHaptic(25, vibrationEnabled);
+
+    if (updated) {
+      p2pService.broadcastMutation('update', updated, nextTasks);
+      fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => setSyncStatus('offline'));
+    }
   };
 
   const deleteTask = (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    const remaining = tasks.filter((t) => t.id !== id);
+    setTasks(remaining);
     playClickTone(soundEnabled);
     triggerHaptic(30, vibrationEnabled);
+
+    // Direct WebRTC broadcast
+    p2pService.broadcastMutation('delete', undefined, remaining, id);
+
+    fetch(`/api/tasks/${id}`, {
+      method: 'DELETE',
+    }).catch(() => setSyncStatus('offline'));
   };
 
   const clearCompleted = () => {
-    setTasks((prev) => prev.filter((t) => t.status !== 'completed'));
+    const remaining = tasks.filter((t) => t.status !== 'completed');
+    setTasks(remaining);
     playClickTone(soundEnabled);
     triggerHaptic(35, vibrationEnabled);
+
+    // WebRTC broadcast
+    p2pService.broadcastMutation('bulk', undefined, remaining);
+
+    fetch('/api/tasks/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: remaining }),
+    }).catch(() => setSyncStatus('offline'));
   };
 
   const resetSampleTasks = () => {
     const sample = getSampleTasks();
     setTasks(sample);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sample));
-    } catch {}
     playClickTone(soundEnabled);
+
+    // WebRTC broadcast
+    p2pService.broadcastMutation('bulk', undefined, sample);
+
+    fetch('/api/tasks/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks: sample }),
+    }).catch(() => setSyncStatus('offline'));
   };
 
   const importTasks = (importedTasks: Task[]) => {
     if (Array.isArray(importedTasks) && importedTasks.length > 0) {
       setTasks(importedTasks);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(importedTasks));
-      } catch {}
       playClickTone(soundEnabled);
+
+      // WebRTC broadcast
+      p2pService.broadcastMutation('bulk', undefined, importedTasks);
+
+      fetch('/api/tasks/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks: importedTasks }),
+      }).catch(() => setSyncStatus('offline'));
     }
   };
 
   return {
     tasks,
     syncStatus,
+    connectedDevices,
     lastAddedTaskId,
+    p2pStats,
+    changeP2PRoom: (newRoom: string) => p2pService.setRoomId(newRoom),
+    syncP2PNow: () => p2pService.triggerFullSync(tasks),
     addTask,
     updateTask,
     toggleTaskStatus,
