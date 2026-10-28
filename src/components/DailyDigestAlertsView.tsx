@@ -41,6 +41,7 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
   onOpenQuickAdd,
 }) => {
   const [testNotificationSent, setTestNotificationSent] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<{ text: string; isError: boolean } | null>(null);
   const today = formatDateKey();
 
   // Compute analytics
@@ -114,10 +115,12 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
         const parsed = JSON.parse(event.target?.result as string);
         if (Array.isArray(parsed)) {
           onImportTasks(parsed);
-          alert(`Successfully imported ${parsed.length} tasks!`);
+          setImportFeedback({ text: `Successfully imported ${parsed.length} tasks!`, isError: false });
+          setTimeout(() => setImportFeedback(null), 4000);
         }
       } catch {
-        alert('Invalid backup JSON file.');
+        setImportFeedback({ text: 'Invalid backup JSON file.', isError: true });
+        setTimeout(() => setImportFeedback(null), 4000);
       }
     };
     reader.readAsText(file);
@@ -409,6 +412,11 @@ export const DailyDigestAlertsView: React.FC<DailyDigestAlertsViewProps> = ({
             <span>Reset to Curated Sample Tasks</span>
           </button>
         </div>
+        {importFeedback && (
+          <p className={`text-xs font-semibold pt-1 ${importFeedback.isError ? 'text-rose-500' : 'text-emerald-500'}`}>
+            {importFeedback.text}
+          </p>
+        )}
       </div>
     </div>
   );

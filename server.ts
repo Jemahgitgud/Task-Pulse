@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -5,6 +6,24 @@ import http from 'http';
 import webpush from 'web-push';
 import { WebSocketServer, WebSocket } from 'ws';
 import { fileURLToPath } from 'url';
+import { GoogleGenAI, Type } from '@google/genai';
+
+let aiClient: GoogleGenAI | null = null;
+function getGenAI(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  if (!aiClient) {
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return aiClient;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -194,6 +213,99 @@ app.get('/api/events', (req, res) => {
     sseClients.delete(res);
     broadcastSSE('device_count', { connectedDevices: sseClients.size });
   });
+});
+
+// Server-Side Gemini AI Endpoints
+app.post('/api/gemini/briefing', async (req, res) => {
+  const ai = getGenAI();
+  if (!ai) {
+    return res.status(503).json({ error: 'Gemini API key is not configured on the server.' });
+  }
+
+  try {
+    const { today, overdue = [], dueToday = [], completedToday = 0, urgent = [] } = req.body || {};
+    const prompt = `You are the executive productivity AI for "Jemah's TaskPulse", a mobile worklist and deadline tracker.
+Current state:
+- Date: ${today}
+- Overdue tasks (${overdue.length}): ${overdue.map((t: any) => `"${t.title}" (${t.project})`).join(', ') || 'None'}
+- Due Today (${dueToday.length}): ${dueToday.map((t: any) => `"${t.title}" [${t.priority}] (${t.project})`).join(', ') || 'None'}
+- Completed Today: ${completedToday}
+- Urgent active items: ${urgent.map((t: any) => t.title).join(', ') || 'None'}
+
+Return a concise JSON object with exactly these keys:
+- headline: A punchy 5-8 word status headline with 1 relevant emoji
+- narrative: A crisp 2-sentence executive summary evaluating today's momentum and workload risk
+- recommendedFocus: Specific action advice on which task or project block to tackle first`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            headline: { type: Type.STRING },
+            narrative: { type: Type.STRING },
+            recommendedFocus: { type: Type.STRING },
+          },
+          required: ['headline', 'narrative', 'recommendedFocus'],
+        },
+      },
+    });
+
+    if (!response.text) {
+      return res.status(502).json({ error: 'Empty response from Gemini model.' });
+    }
+
+    const parsed = JSON.parse(response.text);
+    return res.json(parsed);
+  } catch (err: any) {
+    console.error('Gemini briefing error:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to generate AI briefing.' });
+  }
+});
+
+app.post('/api/gemini/decompose', async (req, res) => {
+  const ai = getGenAI();
+  if (!ai) {
+    return res.status(503).json({ error: 'Gemini API key is not configured on the server.' });
+  }
+
+  try {
+    const { taskTitle, project = 'General' } = req.body || {};
+    if (!taskTitle) {
+      return res.status(400).json({ error: 'taskTitle is required.' });
+    }
+
+    const prompt = `Decompose this task title into 3 to 4 actionable, specific micro-steps for a professional project worklist:
+Task: "${taskTitle}"
+Project: "${project}"
+
+Return JSON array of strings: ["Step 1", "Step 2", "Step 3"]`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+    });
+
+    if (!response.text) {
+      return res.status(502).json({ error: 'Empty response from Gemini model.' });
+    }
+
+    const steps = JSON.parse(response.text);
+    return res.json({ steps });
+  } catch (err: any) {
+    console.error('Gemini decompose error:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to decompose task.' });
+  }
 });
 
 // Web Push Notifications API
