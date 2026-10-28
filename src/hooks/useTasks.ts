@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { Task, TaskPriority, TaskCategory, TaskStatus, P2PSyncStats } from '../types';
-import { formatDateKey, isCelebrationTask } from '../utils/date';
+import { formatDateKey, addDays, calculatePrepDeadline, isCelebrationTask } from '../utils/date';
+import { getMalaysianHolidays } from '../utils/malaysiaHolidays';
 import { playCompletionChime, playClickTone, triggerHaptic, fireConfetti } from '../utils/audio';
 import { p2pService } from '../services/webrtcService';
 
 const STORAGE_KEY = 'taskpulse_tasks_v2';
+const AUTOLOGGED_HOLIDAYS_KEY = 'taskpulse_autologged_holidays_v1';
 const PROJECT_START_DATE = '2026-10-01';
+const UPCOMING_HOLIDAY_LOOKAHEAD_DAYS = 60;
 
 /**
  * Removes Persediaan Sambutan / holiday tasks from before October 2026 (project creation month),
@@ -17,6 +20,126 @@ function cleanPreOctoberCelebrations(list: Task[]): Task[] {
     const targetDate = t.eventDate || t.dueDate;
     return !targetDate || targetDate >= PROJECT_START_DATE;
   });
+}
+
+function getAutoLoggedHolidayMap(): Record<string, boolean> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(AUTOLOGGED_HOLIDAYS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveAutoLoggedHolidayMap(map: Record<string, boolean>) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AUTOLOGGED_HOLIDAYS_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+/**
+ * Automatically logs upcoming Malaysian public holidays (Cuti Umum) within the next 60 days
+ * with a T-7 preparation deadline. Remembers logged holidays so manual deletions are respected.
+ */
+function ensureUpcomingHolidaysAutoLogged(currentTasks: Task[]): {
+  mergedTasks: Task[];
+  newlyCreated: Task[];
+} {
+  const today = formatDateKey();
+  const horizon = addDays(today, UPCOMING_HOLIDAY_LOOKAHEAD_DAYS);
+  const currentYear = new Date().getFullYear();
+  const candidateHolidays = [
+    ...getMalaysianHolidays(currentYear),
+    ...getMalaysianHolidays(currentYear + 1),
+  ].filter(
+    (h) =>
+      h.isPublicHoliday &&
+      h.date >= PROJECT_START_DATE &&
+      h.date >= today &&
+      h.date <= horizon
+  );
+
+  const loggedMap = getAutoLoggedHolidayMap();
+  let mapChanged = false;
+
+  // Record any existing celebration eventDates so deleting one later won't re-create it
+  for (const t of currentTasks) {
+    if (t.eventDate && !loggedMap[t.eventDate]) {
+      loggedMap[t.eventDate] = true;
+      mapChanged = true;
+    }
+  }
+
+  const existingEventDates = new Set(
+    currentTasks.filter((t) => t.eventDate).map((t) => t.eventDate!)
+  );
+  const newlyCreated: Task[] = [];
+  const nowIso = new Date().toISOString();
+
+  for (const h of candidateHolidays) {
+    if (existingEventDates.has(h.date) || loggedMap[h.date]) {
+      if (!loggedMap[h.date]) {
+        loggedMap[h.date] = true;
+        mapChanged = true;
+      }
+      continue;
+    }
+
+    const prepDueDate = calculatePrepDeadline(h.date, 7);
+    const slug = h.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 24);
+
+    const newTask: Task = {
+      id: `holiday_prep_${h.date}_${slug}`,
+      title: `Persediaan Sambutan: ${h.name}`,
+      description: h.description || `Persiapan rasmi 7 hari sebelum ${h.name}.`,
+      project: 'Perayaan & Cuti',
+      priority: 'urgent',
+      category: 'Deadline',
+      dueDate: prepDueDate,
+      dueTime: '09:00',
+      status: 'todo',
+      pinned: false,
+      reminderEnabled: true,
+      isImportantDate: true,
+      eventDate: h.date,
+      eventName: h.name,
+      leadDaysNotice: 7,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      subtasks: [
+        {
+          id: `st_${h.date}_1`,
+          title: 'Sediakan perancangan sambutan & semakan jadual',
+          completed: false,
+        },
+        {
+          id: `st_${h.date}_2`,
+          title: 'Selesaikan tugasan kerja sebelum tarikh cuti',
+          completed: false,
+        },
+      ],
+    };
+
+    newlyCreated.push(newTask);
+    existingEventDates.add(h.date);
+    loggedMap[h.date] = true;
+    mapChanged = true;
+  }
+
+  if (mapChanged) {
+    saveAutoLoggedHolidayMap(loggedMap);
+  }
+
+  return {
+    mergedTasks: newlyCreated.length > 0 ? [...newlyCreated, ...currentTasks] : currentTasks,
+    newlyCreated,
+  };
 }
 
 export function getSampleTasks(): Task[] {
@@ -217,13 +340,26 @@ export function useTasks(soundEnabled = true, vibrationEnabled = true) {
 
         if (Array.isArray(data.tasks) && data.tasks.length > 0) {
           const cleaned = cleanPreOctoberCelebrations(data.tasks);
-          setTasks(cleaned);
+          const { mergedTasks, newlyCreated } = ensureUpcomingHolidaysAutoLogged(cleaned);
+          setTasks(mergedTasks);
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedTasks));
           } catch {}
+          if (newlyCreated.length > 0) {
+            p2pService.broadcastMutation('bulk', undefined, mergedTasks);
+            for (const created of newlyCreated) {
+              fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(created),
+              }).catch(() => {});
+            }
+          }
         } else {
-          // If server database is empty, seed it with initial tasks
-          const initial = tasks.length > 0 ? cleanPreOctoberCelebrations(tasks) : getSampleTasks();
+          // If server database is empty, seed it with initial tasks + upcoming 60-day holidays
+          const baseInitial = tasks.length > 0 ? cleanPreOctoberCelebrations(tasks) : getSampleTasks();
+          const { mergedTasks: initial } = ensureUpcomingHolidaysAutoLogged(baseInitial);
+          setTasks(initial);
           await fetch('/api/tasks/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

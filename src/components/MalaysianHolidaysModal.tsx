@@ -116,7 +116,7 @@ export const MalaysianHolidaysModal: React.FC<MalaysianHolidaysModalProps> = ({
           </div>
 
           <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-            Semua tarikh perayaan utama (Hari Raya, Tahun Baru Cina, Deepavali, Wesak, dsb.) dikira automatik tahun demi tahun. Setiap tugasan yang diautolog akan mempunyai <strong className="text-amber-300">dateline & amaran notifikasi 7 hari sebelum acara sebenar</strong>.
+            Cuti umum utama akan datang (<strong className="text-amber-300">dalam tempoh 60 hari</strong>) diautolog secara automatik tahun demi tahun dengan <strong className="text-amber-300">dateline & amaran notifikasi 7 hari sebelum acara</strong>. Anda juga boleh log mana-mana acara pilihan secara manual di bawah.
           </p>
 
           {/* Year Switcher & Quick 1-Click Action */}
